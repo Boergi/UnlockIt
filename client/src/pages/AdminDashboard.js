@@ -2,10 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
+import toast from 'react-hot-toast';
+import ConfirmationModal from '../components/ConfirmationModal';
 
 const AdminDashboard = () => {
   const { user, logout } = useAuth();
   const [events, setEvents] = useState([]);
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, eventId: null });
   const [stats, setStats] = useState({
     totalEvents: 0,
     activeEvents: 0,
@@ -29,20 +32,34 @@ const AdminDashboard = () => {
       setStats(statsResponse.data);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
+      toast.error('Fehler beim Laden der Dashboard-Daten');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDeleteEvent = async (eventId) => {
-    if (window.confirm('Sind Sie sicher, dass Sie dieses Event löschen möchten?')) {
-      try {
-        await axios.delete(`/api/events/${eventId}`);
-        fetchDashboardData(); // Refresh data
-      } catch (error) {
-        console.error('Error deleting event:', error);
-        alert('Fehler beim Löschen des Events');
-      }
+  const handleDeleteClick = (eventId) => {
+    setConfirmModal({
+      isOpen: true,
+      eventId,
+      title: 'Event löschen',
+      message: 'Sind Sie sicher, dass Sie dieses Event löschen möchten? Alle zugehörigen Teams und Fortschritte werden ebenfalls gelöscht.'
+    });
+  };
+
+  const handleDeleteConfirm = async () => {
+    const { eventId } = confirmModal;
+    const loadingToast = toast.loading('Event wird gelöscht...');
+
+    try {
+      await axios.delete(`/api/events/${eventId}`);
+      toast.success('Event erfolgreich gelöscht!', { id: loadingToast });
+      fetchDashboardData(); // Refresh data
+    } catch (error) {
+      console.error('Error deleting event:', error);
+      toast.error('Fehler beim Löschen des Events', { id: loadingToast });
+    } finally {
+      setConfirmModal({ isOpen: false, eventId: null });
     }
   };
 
@@ -145,7 +162,7 @@ const AdminDashboard = () => {
                       {new Date(event.start_time).toLocaleDateString('de-DE')} - 
                       {new Date(event.end_time).toLocaleDateString('de-DE')}
                     </p>
-                                         <p className="text-gray-400 text-sm">
+                    <p className="text-gray-400 text-sm">
                        Status: <span className={event.team_registration_open ? 'text-green-400' : 'text-red-400'}>
                          {event.team_registration_open ? 'Registrierung offen' : 'Registrierung geschlossen'}
                        </span>
@@ -165,7 +182,7 @@ const AdminDashboard = () => {
                       Scoreboard
                     </Link>
                     <button
-                      onClick={() => handleDeleteEvent(event.id)}
+                      onClick={() => handleDeleteClick(event.id)}
                       className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm transition-colors"
                     >
                       Löschen
@@ -176,6 +193,18 @@ const AdminDashboard = () => {
             </div>
           )}
         </div>
+
+        {/* Confirmation Modal */}
+        <ConfirmationModal
+          isOpen={confirmModal.isOpen}
+          onClose={() => setConfirmModal({ isOpen: false, eventId: null })}
+          onConfirm={handleDeleteConfirm}
+          title="Event löschen"
+          message="Sind Sie sicher, dass Sie dieses Event löschen möchten? Alle zugehörigen Teams und Fortschritte werden ebenfalls gelöscht."
+          confirmText="Löschen"
+          cancelText="Abbrechen"
+          variant="danger"
+        />
       </div>
     </div>
   );

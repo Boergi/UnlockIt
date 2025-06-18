@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
-import { Plus, Edit, Trash2, Clock, Star, FileImage } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { Plus, Edit, Trash2, Clock, Star, FileImage, X } from 'lucide-react';
+import ConfirmationModal from '../components/ConfirmationModal';
 
 const QuestionManagement = () => {
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState(null);
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, questionId: null });
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -29,6 +32,7 @@ const QuestionManagement = () => {
       setQuestions(response.data);
     } catch (error) {
       console.error('Error fetching questions:', error);
+      toast.error('Fehler beim Laden der Fragen');
     } finally {
       setLoading(false);
     }
@@ -62,9 +66,11 @@ const QuestionManagement = () => {
     e.preventDefault();
     
     if (!formData.title || !formData.solution) {
-      alert('Titel und Lösung sind erforderlich');
+      toast.error('Titel und Lösung sind erforderlich');
       return;
     }
+
+    const loadingToast = toast.loading(editingQuestion ? 'Frage wird aktualisiert...' : 'Frage wird erstellt...');
 
     try {
       const submitData = new FormData();
@@ -78,19 +84,19 @@ const QuestionManagement = () => {
         await axios.put(`/api/questions/${editingQuestion.id}`, submitData, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
-        alert('Frage erfolgreich aktualisiert!');
+        toast.success('Frage erfolgreich aktualisiert!', { id: loadingToast });
       } else {
         await axios.post('/api/questions', submitData, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
-        alert('Frage erfolgreich erstellt!');
+        toast.success('Frage erfolgreich erstellt!', { id: loadingToast });
       }
 
       resetForm();
       fetchQuestions();
     } catch (error) {
       console.error('Error saving question:', error);
-      alert('Fehler beim Speichern der Frage: ' + (error.response?.data?.error || error.message));
+      toast.error('Fehler beim Speichern der Frage: ' + (error.response?.data?.error || error.message), { id: loadingToast });
     }
   };
 
@@ -109,20 +115,32 @@ const QuestionManagement = () => {
     setShowCreateForm(true);
   };
 
-  const handleDelete = async (questionId) => {
-    if (window.confirm('Sind Sie sicher, dass Sie diese Frage löschen möchten?')) {
-      try {
-        await axios.delete(`/api/questions/${questionId}`);
-        alert('Frage erfolgreich gelöscht!');
-        fetchQuestions();
-      } catch (error) {
-        console.error('Error deleting question:', error);
-        if (error.response?.status === 400) {
-          alert('Diese Frage kann nicht gelöscht werden, da sie in einem oder mehreren Events verwendet wird.');
-        } else {
-          alert('Fehler beim Löschen der Frage');
-        }
+  const handleDeleteClick = (questionId) => {
+    setConfirmModal({
+      isOpen: true,
+      questionId,
+      title: 'Frage löschen',
+      message: 'Sind Sie sicher, dass Sie diese Frage löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.'
+    });
+  };
+
+  const handleDeleteConfirm = async () => {
+    const { questionId } = confirmModal;
+    const loadingToast = toast.loading('Frage wird gelöscht...');
+
+    try {
+      await axios.delete(`/api/questions/${questionId}`);
+      toast.success('Frage erfolgreich gelöscht!', { id: loadingToast });
+      fetchQuestions();
+    } catch (error) {
+      console.error('Error deleting question:', error);
+      if (error.response?.status === 400) {
+        toast.error('Diese Frage kann nicht gelöscht werden, da sie in einem oder mehreren Events verwendet wird.', { id: loadingToast });
+      } else {
+        toast.error('Fehler beim Löschen der Frage', { id: loadingToast });
       }
+    } finally {
+      setConfirmModal({ isOpen: false, questionId: null });
     }
   };
 
@@ -177,9 +195,18 @@ const QuestionManagement = () => {
         {/* Create/Edit Form */}
         {showCreateForm && (
           <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 mb-6">
-            <h2 className="text-xl font-bold text-white mb-4">
-              {editingQuestion ? 'Frage bearbeiten' : 'Neue Frage erstellen'}
-            </h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-white">
+                {editingQuestion ? 'Frage bearbeiten' : 'Neue Frage erstellen'}
+              </h2>
+              <button
+                onClick={resetForm}
+                className="text-gray-400 hover:text-white p-1"
+                title="Schließen"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -337,7 +364,7 @@ const QuestionManagement = () => {
                         <Edit className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => handleDelete(question.id)}
+                        onClick={() => handleDeleteClick(question.id)}
                         className="text-red-400 hover:text-red-300 p-1"
                         title="Löschen"
                       >
@@ -388,6 +415,18 @@ const QuestionManagement = () => {
             </div>
           )}
         </div>
+
+        {/* Confirmation Modal */}
+        <ConfirmationModal
+          isOpen={confirmModal.isOpen}
+          onClose={() => setConfirmModal({ isOpen: false, questionId: null })}
+          onConfirm={handleDeleteConfirm}
+          title="Frage löschen"
+          message="Sind Sie sicher, dass Sie diese Frage löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden."
+          confirmText="Löschen"
+          cancelText="Abbrechen"
+          variant="danger"
+        />
       </div>
     </div>
   );

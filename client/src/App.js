@@ -41,6 +41,16 @@ function App() {
                   <EventManagement />
                 </ProtectedRoute>
               } />
+              <Route path="/admin/events/new" element={
+                <ProtectedRoute>
+                  <EventManagement />
+                </ProtectedRoute>
+              } />
+              <Route path="/admin/events/:id" element={
+                <ProtectedRoute>
+                  <EventManagement />
+                </ProtectedRoute>
+              } />
               <Route path="/admin/questions" element={
                 <ProtectedRoute>
                   <QuestionManagement />

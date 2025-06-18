@@ -219,3 +219,4 @@ tramp
 *.zip
 *.rar
 *.7z
+server/uploads/

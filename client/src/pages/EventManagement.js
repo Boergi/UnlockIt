@@ -1,9 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Plus, Edit, Trash2, Calendar, Users, HelpCircle, Eye, Settings } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { Plus, Edit, Trash2, Calendar, Users, HelpCircle, Eye, Settings, X, UserPlus } from 'lucide-react';
+import ConfirmationModal from '../components/ConfirmationModal';
+import { useSocket } from '../contexts/SocketContext';
 
 const EventManagement = () => {
+  const location = useLocation();
+  const { id: eventId } = useParams();
+  const navigate = useNavigate();
+  const { socket } = useSocket();
   const [events, setEvents] = useState([]);
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -11,6 +18,26 @@ const EventManagement = () => {
   const [editingEvent, setEditingEvent] = useState(null);
   const [showQuestionSelector, setShowQuestionSelector] = useState(null);
   const [selectedQuestions, setSelectedQuestions] = useState([]);
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, eventId: null });
+  
+  // Team Management State
+  const [showTeamManager, setShowTeamManager] = useState(null);
+  const [teams, setTeams] = useState([]);
+  const [showTeamForm, setShowTeamForm] = useState(false);
+  const [editingTeam, setEditingTeam] = useState(null);
+  const [teamConfirmModal, setTeamConfirmModal] = useState({ isOpen: false, teamId: null });
+  const [aiConfig, setAiConfig] = useState({ aiEnabled: false });
+  const [generatingLogo, setGeneratingLogo] = useState(false);
+  const [logoOptions, setLogoOptions] = useState([]);
+  const [showLogoSelector, setShowLogoSelector] = useState(false);
+  const [currentTeamForLogo, setCurrentTeamForLogo] = useState(null);
+  const [generationProgress, setGenerationProgress] = useState({ progress: 0, total: 3, message: '', currentStyle: '' });
+  const [teamFormData, setTeamFormData] = useState({
+    name: '',
+    logo_url: '',
+    generate_ai_logo: false
+  });
+  
   const [formData, setFormData] = useState({
     name: '',
     start_time: '',
@@ -22,7 +49,78 @@ const EventManagement = () => {
 
   useEffect(() => {
     fetchData();
-  }, []);
+    fetchAiConfig();
+    
+    // Handle URL-based actions
+    if (location.pathname.includes('/new')) {
+      setShowCreateForm(true);
+    } else if (eventId) {
+      // Load event for editing
+      loadEventForEditing(eventId);
+    }
+  }, [location.pathname, eventId]);
+
+  // Socket.IO listeners for live logo updates
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleLogoStatus = (data) => {
+      setGenerationProgress({
+        progress: data.progress || 0,
+        total: data.total || 3,
+        message: data.message || '',
+        currentStyle: data.currentStyle || ''
+      });
+    };
+
+    const handleLogoUpdate = (data) => {
+      setLogoOptions(prev => {
+        const updated = [...prev];
+        const existingIndex = updated.findIndex(opt => opt.id === data.logoOption.id);
+        if (existingIndex >= 0) {
+          updated[existingIndex] = data.logoOption;
+        } else {
+          updated.push(data.logoOption);
+        }
+        return updated.sort((a, b) => a.id - b.id);
+      });
+    };
+
+    const handleLogoError = (data) => {
+      toast.error(data.error || 'Fehler bei Logo-Generierung');
+    };
+
+    socket.on('logo-generation-status', handleLogoStatus);
+    socket.on('logo-generation-update', handleLogoUpdate);
+    socket.on('logo-generation-error', handleLogoError);
+
+    return () => {
+      socket.off('logo-generation-status', handleLogoStatus);
+      socket.off('logo-generation-update', handleLogoUpdate);
+      socket.off('logo-generation-error', handleLogoError);
+    };
+  }, [socket]);
+
+  const loadEventForEditing = async (id) => {
+    try {
+      const response = await axios.get(`/api/events/${id}`);
+      const event = response.data;
+      
+      setFormData({
+        name: event.name,
+        start_time: event.start_time ? new Date(event.start_time).toISOString().slice(0, 16) : '',
+        end_time: event.end_time ? new Date(event.end_time).toISOString().slice(0, 16) : '',
+        use_random_order: event.use_random_order || false,
+        team_registration_open: event.team_registration_open !== false,
+        access_code: event.access_code || ''
+      });
+      setEditingEvent(event);
+      setShowCreateForm(true);
+    } catch (error) {
+      console.error('Error loading event for editing:', error);
+      toast.error('Fehler beim Laden des Events');
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -34,8 +132,18 @@ const EventManagement = () => {
       setQuestions(questionsResponse.data);
     } catch (error) {
       console.error('Error fetching data:', error);
+      toast.error('Fehler beim Laden der Daten');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAiConfig = async () => {
+    try {
+      const response = await axios.get('/api/teams/ai-config');
+      setAiConfig(response.data);
+    } catch (error) {
+      console.error('Error fetching AI config:', error);
     }
   };
 
@@ -50,6 +158,11 @@ const EventManagement = () => {
     });
     setEditingEvent(null);
     setShowCreateForm(false);
+    
+    // Navigate back to events list if we were editing an event via URL
+    if (eventId) {
+      navigate('/admin/events');
+    }
   };
 
   const handleInputChange = (e) => {
@@ -64,24 +177,26 @@ const EventManagement = () => {
     e.preventDefault();
     
     if (!formData.name || !formData.start_time) {
-      alert('Name und Startzeit sind erforderlich');
+      toast.error('Name und Startzeit sind erforderlich');
       return;
     }
+
+    const loadingToast = toast.loading(editingEvent ? 'Event wird aktualisiert...' : 'Event wird erstellt...');
 
     try {
       if (editingEvent) {
         await axios.put(`/api/events/${editingEvent.id}`, formData);
-        alert('Event erfolgreich aktualisiert!');
+        toast.success('Event erfolgreich aktualisiert!', { id: loadingToast });
       } else {
         await axios.post('/api/events', formData);
-        alert('Event erfolgreich erstellt!');
+        toast.success('Event erfolgreich erstellt!', { id: loadingToast });
       }
 
       resetForm();
       fetchData();
     } catch (error) {
       console.error('Error saving event:', error);
-      alert('Fehler beim Speichern des Events: ' + (error.response?.data?.error || error.message));
+      toast.error('Fehler beim Speichern des Events: ' + (error.response?.data?.error || error.message), { id: loadingToast });
     }
   };
 
@@ -98,16 +213,28 @@ const EventManagement = () => {
     setShowCreateForm(true);
   };
 
-  const handleDelete = async (eventId) => {
-    if (window.confirm('Sind Sie sicher, dass Sie dieses Event löschen möchten?')) {
-      try {
-        await axios.delete(`/api/events/${eventId}`);
-        alert('Event erfolgreich gelöscht!');
-        fetchData();
-      } catch (error) {
-        console.error('Error deleting event:', error);
-        alert('Fehler beim Löschen des Events');
-      }
+  const handleDeleteClick = (eventId) => {
+    setConfirmModal({
+      isOpen: true,
+      eventId,
+      title: 'Event löschen',
+      message: 'Sind Sie sicher, dass Sie dieses Event löschen möchten? Alle zugehörigen Teams und Fortschritte werden ebenfalls gelöscht.'
+    });
+  };
+
+  const handleDeleteConfirm = async () => {
+    const { eventId } = confirmModal;
+    const loadingToast = toast.loading('Event wird gelöscht...');
+
+    try {
+      await axios.delete(`/api/events/${eventId}`);
+      toast.success('Event erfolgreich gelöscht!', { id: loadingToast });
+      fetchData();
+    } catch (error) {
+      console.error('Error deleting event:', error);
+      toast.error('Fehler beim Löschen des Events', { id: loadingToast });
+    } finally {
+      setConfirmModal({ isOpen: false, eventId: null });
     }
   };
 
@@ -118,6 +245,7 @@ const EventManagement = () => {
       setShowQuestionSelector(event);
     } catch (error) {
       console.error('Error fetching event questions:', error);
+      toast.error('Fehler beim Laden der Event-Fragen');
     }
   };
 
@@ -130,16 +258,190 @@ const EventManagement = () => {
   };
 
   const handleSaveQuestions = async () => {
+    const loadingToast = toast.loading('Fragen werden gespeichert...');
+
     try {
       await axios.post(`/api/events/${showQuestionSelector.id}/questions`, {
         questionIds: selectedQuestions
       });
-      alert('Fragen erfolgreich zugeordnet!');
+      toast.success('Fragen erfolgreich zugeordnet!', { id: loadingToast });
       setShowQuestionSelector(null);
       fetchData();
     } catch (error) {
       console.error('Error saving questions:', error);
-      alert('Fehler beim Speichern der Fragen');
+      toast.error('Fehler beim Speichern der Fragen', { id: loadingToast });
+    }
+  };
+
+  // Team Management Functions
+  const handleManageTeams = async (event) => {
+    try {
+      const response = await axios.get(`/api/teams/event/${event.id}`);
+      setTeams(response.data);
+      setShowTeamManager(event);
+    } catch (error) {
+      console.error('Error fetching teams:', error);
+      toast.error('Fehler beim Laden der Teams');
+    }
+  };
+
+  const resetTeamForm = () => {
+    setTeamFormData({
+      name: '',
+      logo_url: '',
+      generate_ai_logo: false
+    });
+    setEditingTeam(null);
+    setShowTeamForm(false);
+    setLogoOptions([]);
+    setShowLogoSelector(false);
+    setCurrentTeamForLogo(null);
+  };
+
+  const handleTeamInputChange = (e) => {
+    const { name, value } = e.target;
+    setTeamFormData({
+      ...teamFormData,
+      [name]: value
+    });
+  };
+
+  const handleTeamSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!teamFormData.name) {
+      toast.error('Team-Name ist erforderlich');
+      return;
+    }
+
+    // Check if AI logo generation is requested but AI is not enabled
+    if (teamFormData.generate_ai_logo && !aiConfig.aiEnabled) {
+      toast.error('AI-Logo-Generierung ist nicht verfügbar');
+      return;
+    }
+
+    const loadingMessage = editingTeam 
+      ? 'Team wird aktualisiert...' 
+      : (teamFormData.generate_ai_logo ? 'Team wird erstellt und 3 Logo-Optionen generiert...' : 'Team wird erstellt...');
+    
+    const loadingToast = toast.loading(loadingMessage);
+    setGeneratingLogo(teamFormData.generate_ai_logo);
+
+    try {
+      if (editingTeam) {
+        await axios.put(`/api/teams/${editingTeam.id}`, teamFormData);
+        const successMessage = teamFormData.generate_ai_logo && !editingTeam.ai_logo_generated
+          ? 'Team erfolgreich aktualisiert und Logo-Optionen generiert!'
+          : 'Team erfolgreich aktualisiert!';
+        toast.success(successMessage, { id: loadingToast });
+      } else {
+        const response = await axios.post('/api/teams/admin/create', {
+          ...teamFormData,
+          event_id: showTeamManager.id
+        });
+        
+        if (teamFormData.generate_ai_logo) {
+          // If AI logo was generated, show logo selection
+          toast.success('Team erstellt! Wähle jetzt dein Logo aus.', { id: loadingToast });
+          setCurrentTeamForLogo(response.data);
+          await generateLogoOptions(teamFormData.name, showTeamManager.name);
+        } else {
+          toast.success('Team erfolgreich erstellt!', { id: loadingToast });
+        }
+      }
+
+      if (!teamFormData.generate_ai_logo || editingTeam) {
+        resetTeamForm();
+        handleManageTeams(showTeamManager); // Refresh teams
+      }
+    } catch (error) {
+      console.error('Error saving team:', error);
+      if (error.response?.status === 409) {
+        toast.error('Ein Team mit diesem Namen existiert bereits für dieses Event', { id: loadingToast });
+      } else {
+        toast.error('Fehler beim Speichern des Teams: ' + (error.response?.data?.error || error.message), { id: loadingToast });
+      }
+    } finally {
+      setGeneratingLogo(false);
+    }
+  };
+
+  const generateLogoOptions = async (teamName, eventName) => {
+    try {
+      // Clear previous logos and show selector immediately
+      setLogoOptions([]);
+      setGenerationProgress({ progress: 0, total: 3, message: 'Starte Logo-Generierung...', currentStyle: '' });
+      setShowLogoSelector(true);
+      setShowTeamForm(false);
+
+      const response = await axios.post('/api/teams/generate-logo', {
+        teamName,
+        eventName,
+        socketId: socket?.id
+      });
+      
+      // Final logos will be set via socket events
+      console.log('Logo generation started:', response.data.message);
+    } catch (error) {
+      console.error('Error generating logo options:', error);
+      toast.error('Fehler beim Generieren der Logo-Optionen: ' + (error.response?.data?.error || error.message));
+      setShowLogoSelector(false);
+      setShowTeamForm(true);
+    }
+  };
+
+  const handleLogoSelect = async (logoUrl) => {
+    if (!currentTeamForLogo) return;
+
+    const loadingToast = toast.loading('Logo wird ausgewählt...');
+
+    try {
+      await axios.post('/api/teams/select-logo', {
+        teamId: currentTeamForLogo.id,
+        logoUrl: logoUrl
+      });
+
+      toast.success('Logo erfolgreich ausgewählt!', { id: loadingToast });
+      resetTeamForm();
+      handleManageTeams(showTeamManager); // Refresh teams
+    } catch (error) {
+      console.error('Error selecting logo:', error);
+      toast.error('Fehler beim Auswählen des Logos: ' + (error.response?.data?.error || error.message), { id: loadingToast });
+    }
+  };
+
+  const handleTeamEdit = (team) => {
+    setTeamFormData({
+      name: team.name,
+      logo_url: team.logo_url || '',
+      generate_ai_logo: team.generate_ai_logo || false
+    });
+    setEditingTeam(team);
+    setShowTeamForm(true);
+  };
+
+  const handleTeamDeleteClick = (teamId) => {
+    setTeamConfirmModal({
+      isOpen: true,
+      teamId,
+      title: 'Team löschen',
+      message: 'Sind Sie sicher, dass Sie dieses Team löschen möchten? Alle Fortschritte des Teams werden ebenfalls gelöscht.'
+    });
+  };
+
+  const handleTeamDeleteConfirm = async () => {
+    const { teamId } = teamConfirmModal;
+    const loadingToast = toast.loading('Team wird gelöscht...');
+
+    try {
+      await axios.delete(`/api/teams/${teamId}`);
+      toast.success('Team erfolgreich gelöscht!', { id: loadingToast });
+      handleManageTeams(showTeamManager); // Refresh teams
+    } catch (error) {
+      console.error('Error deleting team:', error);
+      toast.error('Fehler beim Löschen des Teams', { id: loadingToast });
+    } finally {
+      setTeamConfirmModal({ isOpen: false, teamId: null });
     }
   };
 
@@ -177,9 +479,18 @@ const EventManagement = () => {
         {/* Create/Edit Form */}
         {showCreateForm && (
           <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 mb-6">
-            <h2 className="text-xl font-bold text-white mb-4">
-              {editingEvent ? 'Event bearbeiten' : 'Neues Event erstellen'}
-            </h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-white">
+                {editingEvent ? 'Event bearbeiten' : 'Neues Event erstellen'}
+              </h2>
+              <button
+                onClick={resetForm}
+                className="text-gray-400 hover:text-white p-1"
+                title="Schließen"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -318,7 +629,7 @@ const EventManagement = () => {
                         </div>
                       )}
                     </div>
-                    <div className="flex space-x-2 ml-4">
+                    <div className="flex flex-wrap gap-2 ml-4">
                       <button
                         onClick={() => handleManageQuestions(event)}
                         className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-sm transition-colors flex items-center"
@@ -326,6 +637,14 @@ const EventManagement = () => {
                       >
                         <Settings className="w-4 h-4 mr-1" />
                         Fragen
+                      </button>
+                      <button
+                        onClick={() => handleManageTeams(event)}
+                        className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1 rounded text-sm transition-colors flex items-center"
+                        title="Teams verwalten"
+                      >
+                        <UserPlus className="w-4 h-4 mr-1" />
+                        Teams
                       </button>
                       <button
                         onClick={() => handleEdit(event)}
@@ -344,7 +663,7 @@ const EventManagement = () => {
                         Scoreboard
                       </Link>
                       <button
-                        onClick={() => handleDelete(event.id)}
+                        onClick={() => handleDeleteClick(event.id)}
                         className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm transition-colors flex items-center"
                         title="Löschen"
                       >
@@ -363,9 +682,18 @@ const EventManagement = () => {
         {showQuestionSelector && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
             <div className="bg-gray-900 rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-              <h2 className="text-2xl font-bold text-white mb-4">
-                Fragen für "{showQuestionSelector.name}" auswählen
-              </h2>
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-2xl font-bold text-white">
+                  Fragen für "{showQuestionSelector.name}" auswählen
+                </h2>
+                <button
+                  onClick={() => setShowQuestionSelector(null)}
+                  className="text-gray-400 hover:text-white p-1"
+                  title="Schließen"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
               
               <div className="mb-6">
                 <p className="text-gray-300 mb-2">
@@ -437,6 +765,385 @@ const EventManagement = () => {
             </div>
           </div>
         )}
+
+        {/* Team Management Modal */}
+        {showTeamManager && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-gray-900 rounded-lg p-6 w-full max-w-6xl max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-2xl font-bold text-white">
+                  Teams für "{showTeamManager.name}" verwalten
+                </h2>
+                <button
+                  onClick={() => setShowTeamManager(null)}
+                  className="text-gray-400 hover:text-white p-1"
+                  title="Schließen"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+              
+              <div className="mb-6">
+                <div className="flex justify-between items-center mb-4">
+                  <p className="text-gray-300">
+                    Verwalten Sie Teams für dieses Event. Teams können manuell erstellt werden, wenn die Registrierung geschlossen ist.
+                  </p>
+                  <button
+                    onClick={() => setShowTeamForm(true)}
+                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Team hinzufügen
+                  </button>
+                </div>
+              </div>
+
+              {/* Teams List */}
+              <div className="bg-white/5 rounded-lg p-4">
+                <h3 className="text-lg font-bold text-white mb-4">
+                  Teams ({teams.length})
+                </h3>
+                
+                {teams.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-gray-400 mb-4">Noch keine Teams für dieses Event.</p>
+                    <button
+                      onClick={() => setShowTeamForm(true)}
+                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors"
+                    >
+                      Erstes Team erstellen
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                         {teams.map((team) => (
+                       <div key={team.id} className="bg-white/5 rounded-lg p-4">
+                         <div className="flex justify-between items-start mb-3">
+                           <div className="flex items-center">
+                             {team.logo_url && (
+                               <div className="relative mr-2">
+                                 <img 
+                                   src={`http://localhost:3001${team.logo_url}`}
+                                   alt={`${team.name} Logo`}
+                                   className="w-8 h-8 rounded-full object-cover"
+                                   onError={(e) => { e.target.style.display = 'none' }}
+                                 />
+                                 {team.ai_logo_generated && (
+                                   <div className="absolute -top-1 -right-1 w-3 h-3 bg-purple-500 rounded-full flex items-center justify-center">
+                                     <span className="text-xs text-white">✨</span>
+                                   </div>
+                                 )}
+                               </div>
+                             )}
+                             <div>
+                               <h4 className="text-white font-medium">{team.name}</h4>
+                               {team.ai_logo_generated && (
+                                 <span className="text-xs text-purple-400">🎨 AI-Logo</span>
+                               )}
+                             </div>
+                           </div>
+                           <div className="flex space-x-1">
+                             <button
+                               onClick={() => handleTeamEdit(team)}
+                               className="text-blue-400 hover:text-blue-300 p-1"
+                               title="Team bearbeiten"
+                             >
+                               <Edit className="w-4 h-4" />
+                             </button>
+                             <button
+                               onClick={() => handleTeamDeleteClick(team.id)}
+                               className="text-red-400 hover:text-red-300 p-1"
+                               title="Team löschen"
+                             >
+                               <Trash2 className="w-4 h-4" />
+                             </button>
+                           </div>
+                         </div>
+                         <div className="text-sm text-gray-400">
+                           <p>Erstellt: {new Date(team.created_at).toLocaleDateString('de-DE')}</p>
+                           {team.updated_at !== team.created_at && (
+                             <p>Bearbeitet: {new Date(team.updated_at).toLocaleDateString('de-DE')}</p>
+                           )}
+                         </div>
+                       </div>
+                     ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end mt-6">
+                <button
+                  onClick={() => setShowTeamManager(null)}
+                  className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded-lg transition-colors"
+                >
+                  Schließen
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Team Form Modal */}
+        {showTeamForm && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-gray-900 rounded-lg p-6 w-full max-w-md">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-bold text-white">
+                  {editingTeam ? 'Team bearbeiten' : 'Neues Team erstellen'}
+                </h3>
+                <button
+                  onClick={resetTeamForm}
+                  className="text-gray-400 hover:text-white p-1"
+                  title="Schließen"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <form onSubmit={handleTeamSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-white font-medium mb-2">Team Name *</label>
+                  <input
+                    type="text"
+                    name="name"
+                    value={teamFormData.name}
+                    onChange={handleTeamInputChange}
+                    className="w-full bg-white/20 text-white border border-white/30 rounded-lg px-4 py-2 placeholder-gray-400"
+                    placeholder="z.B. Team Alpha"
+                    required
+                    disabled={generatingLogo}
+                  />
+                </div>
+
+                {/* Logo Section */}
+                <div>
+                  <label className="block text-white font-medium mb-2">Team Logo</label>
+                  
+                  {aiConfig.aiEnabled ? (
+                    <div className="space-y-3">
+                      {/* AI Logo Generation Option */}
+                      {(!editingTeam || !editingTeam.ai_logo_generated) && (
+                        <label className="flex items-center text-white">
+                          <input
+                            type="checkbox"
+                            name="generate_ai_logo"
+                            checked={teamFormData.generate_ai_logo}
+                            onChange={handleTeamInputChange}
+                            className="mr-2"
+                            disabled={generatingLogo || (editingTeam && editingTeam.ai_logo_generated)}
+                          />
+                          <span className="flex items-center">
+                            🎨 3 AI-Logo Optionen generieren
+                            {generatingLogo && <span className="ml-2 text-yellow-400">Generiert...</span>}
+                          </span>
+                        </label>
+                      )}
+                      
+                      {editingTeam && editingTeam.ai_logo_generated && (
+                        <div className="text-green-400 text-sm">
+                          ✅ AI-Logo bereits generiert
+                        </div>
+                      )}
+
+                      {/* Manual Logo URL (only if not using AI) */}
+                      {!teamFormData.generate_ai_logo && (
+                        <div>
+                          <input
+                            type="url"
+                            name="logo_url"
+                            value={teamFormData.logo_url}
+                            onChange={handleTeamInputChange}
+                            className="w-full bg-white/20 text-white border border-white/30 rounded-lg px-4 py-2 placeholder-gray-400"
+                            placeholder="https://example.com/logo.png"
+                            disabled={generatingLogo}
+                          />
+                          <p className="text-gray-400 text-sm mt-1">
+                            Optional - URL zu einem Team-Logo
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    /* No AI Available - Name Only */
+                    <div className="text-gray-400 text-sm">
+                      Nur Team-Name verfügbar (AI-Logo-Generierung nicht aktiviert)
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex space-x-4">
+                  <button
+                    type="submit"
+                    disabled={generatingLogo}
+                    className={`flex-1 px-4 py-2 rounded-lg transition-colors ${
+                      generatingLogo 
+                        ? 'bg-gray-500 cursor-not-allowed' 
+                        : 'bg-blue-600 hover:bg-blue-700'
+                    } text-white`}
+                  >
+                    {generatingLogo 
+                      ? '🎨 Generiert 3 Optionen...' 
+                      : (editingTeam ? 'Aktualisieren' : 'Erstellen')
+                    }
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetTeamForm}
+                    disabled={generatingLogo}
+                    className="flex-1 bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    Abbrechen
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Logo Selection Modal */}
+        {showLogoSelector && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-gray-900 rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h3 className="text-2xl font-bold text-white">
+                    Logo auswählen für "{currentTeamForLogo?.name}"
+                  </h3>
+                  <p className="text-gray-300 mt-1">
+                    Wähle eines der generierten Logos aus. Kosten: ~12 Cent (3 × 4 Cent)
+                  </p>
+                </div>
+                <button
+                  onClick={resetTeamForm}
+                  className="text-gray-400 hover:text-white p-1"
+                  title="Schließen"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {[1, 2, 3].map((id) => {
+                  const option = logoOptions.find(opt => opt.id === id);
+                  const isGenerating = generationProgress.progress < id;
+                  const isCurrentlyGenerating = generationProgress.progress === id - 1 && generationProgress.progress < generationProgress.total;
+                  
+                  return (
+                    <div key={id} className="bg-white/5 rounded-lg p-4 hover:bg-white/10 transition-colors">
+                      <div className="aspect-square mb-4 bg-white/10 rounded-lg overflow-hidden relative">
+                        {option ? (
+                          <img
+                            src={`http://localhost:3001${option.url}`}
+                            alt={`Logo Option ${option.id}`}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtc2l6ZT0iMTgiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5FcnJvcjwvdGV4dD48L3N2Zz4=';
+                            }}
+                          />
+                        ) : isCurrentlyGenerating ? (
+                          <div className="w-full h-full flex flex-col items-center justify-center">
+                            <div className="relative w-16 h-16 mb-4">
+                              <div className="absolute inset-0 border-4 border-blue-200 rounded-full"></div>
+                              <div className="absolute inset-0 border-4 border-blue-600 rounded-full border-t-transparent animate-spin"></div>
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <span className="text-blue-600 font-bold text-sm">🎨</span>
+                              </div>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-white text-sm font-medium">Generiert...</p>
+                              <p className="text-gray-400 text-xs mt-1">{generationProgress.currentStyle}</p>
+                            </div>
+                          </div>
+                        ) : isGenerating ? (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <div className="text-center">
+                              <div className="w-12 h-12 border-2 border-gray-600 rounded-full mx-auto mb-2"></div>
+                              <p className="text-gray-500 text-sm">Warteschlange</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <div className="text-center">
+                              <div className="w-12 h-12 bg-green-600 rounded-full flex items-center justify-center mx-auto mb-2">
+                                <span className="text-white text-xl">✓</span>
+                              </div>
+                              <p className="text-green-400 text-sm">Fertig</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-center mb-4">
+                        <h4 className="text-white font-medium mb-1">Option {id}</h4>
+                        <p className="text-gray-400 text-sm">
+                          {option ? option.style : ['Modern & Professional', 'Dynamic & Bold', 'Minimalist & Clean'][id - 1]}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => option && handleLogoSelect(option.url)}
+                        disabled={!option}
+                        className={`w-full px-4 py-2 rounded-lg transition-colors ${
+                          option 
+                            ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                            : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                        }`}
+                      >
+                        {option ? 'Dieses Logo wählen' : 'Wird generiert...'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Progress Bar */}
+              <div className="mt-6 bg-white/10 rounded-lg p-4">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-white font-medium">Fortschritt</span>
+                  <span className="text-gray-300 text-sm">{generationProgress.progress}/{generationProgress.total}</span>
+                </div>
+                <div className="w-full bg-gray-700 rounded-full h-2 mb-2">
+                  <div 
+                    className="bg-blue-600 h-2 rounded-full transition-all duration-500"
+                    style={{ width: `${(generationProgress.progress / generationProgress.total) * 100}%` }}
+                  ></div>
+                </div>
+                <p className="text-gray-300 text-sm">{generationProgress.message}</p>
+              </div>
+
+              <div className="flex justify-center mt-6">
+                <button
+                  onClick={resetTeamForm}
+                  className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded-lg transition-colors"
+                >
+                  Abbrechen
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Event Confirmation Modal */}
+        <ConfirmationModal
+          isOpen={confirmModal.isOpen}
+          onClose={() => setConfirmModal({ isOpen: false, eventId: null })}
+          onConfirm={handleDeleteConfirm}
+          title="Event löschen"
+          message="Sind Sie sicher, dass Sie dieses Event löschen möchten? Alle zugehörigen Teams und Fortschritte werden ebenfalls gelöscht."
+          confirmText="Löschen"
+          cancelText="Abbrechen"
+          variant="danger"
+        />
+
+        {/* Team Confirmation Modal */}
+        <ConfirmationModal
+          isOpen={teamConfirmModal.isOpen}
+          onClose={() => setTeamConfirmModal({ isOpen: false, teamId: null })}
+          onConfirm={handleTeamDeleteConfirm}
+          title="Team löschen"
+          message="Sind Sie sicher, dass Sie dieses Team löschen möchten? Alle Fortschritte des Teams werden ebenfalls gelöscht."
+          confirmText="Löschen"
+          cancelText="Abbrechen"
+          variant="danger"
+        />
       </div>
     </div>
   );

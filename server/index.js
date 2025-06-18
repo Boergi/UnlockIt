@@ -12,7 +12,7 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: process.env.NODE_ENV === 'production' ? false : "http://localhost:3000",
+    origin: process.env.NODE_ENV === 'production' ? false : ["http://localhost:3000", "http://localhost:3001"],
     methods: ["GET", "POST"]
   }
 });
@@ -28,7 +28,7 @@ const initServer = async () => {
   app.set('trust proxy', 1); // Trust first proxy for rate limiting
   app.use(helmet());
   app.use(cors({
-    origin: process.env.NODE_ENV === 'production' ? false : "http://localhost:3000",
+    origin: process.env.NODE_ENV === 'production' ? false : ["http://localhost:3000", "http://localhost:3001"],
     credentials: true // Enable cookies/sessions
   }));
   app.use(express.json());
@@ -44,13 +44,28 @@ const initServer = async () => {
   });
   app.use(limiter);
 
-  // Static files
-  app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+  // Static files with CORS headers
+  app.use('/uploads', (req, res, next) => {
+    // Allow requests from both localhost:3000 and localhost:3001
+    const allowedOrigins = ['http://localhost:3000', 'http://localhost:3001'];
+    const origin = req.headers.origin;
+    
+    if (allowedOrigins.includes(origin)) {
+      res.header('Access-Control-Allow-Origin', origin);
+    } else if (process.env.NODE_ENV !== 'production') {
+      res.header('Access-Control-Allow-Origin', '*');
+    }
+    
+    res.header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    res.header('Cross-Origin-Resource-Policy', 'cross-origin');
+    next();
+  }, express.static(path.join(__dirname, 'uploads')));
 
   // Routes
   const authRoutes = require('./routes/auth');
   const eventRoutes = require('./routes/events');
-  const teamRoutes = require('./routes/teams');
+  const { router: teamRoutes } = require('./routes/teams');
   const questionRoutes = require('./routes/questions');
   const gameRoutes = require('./routes/game');
 
