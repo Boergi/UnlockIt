@@ -1,46 +1,52 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import axios from 'axios';
+import { Plus, Edit, Trash2, Clock, Star, FileImage } from 'lucide-react';
 
 const QuestionManagement = () => {
-  const { eventId } = useParams(); // Optional eventId from URL
   const [questions, setQuestions] = useState([]);
-  const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [selectedEventId, setSelectedEventId] = useState('');
+  const [editingQuestion, setEditingQuestion] = useState(null);
   const [formData, setFormData] = useState({
-    event_id: '',
-    question_text: '',
+    title: '',
+    description: '',
     solution: '',
-    difficulty_level: 1,
+    difficulty: 'medium',
     time_limit_minutes: 10,
-    tip1: '',
-    tip2: '',
+    tip_1: '',
+    tip_2: '',
     image: null
   });
 
   useEffect(() => {
-    fetchData();
-    // If eventId is provided in URL, set it as selected
-    if (eventId) {
-      setSelectedEventId(eventId);
-    }
-  }, [eventId]);
+    fetchQuestions();
+  }, []);
 
-  const fetchData = async () => {
+  const fetchQuestions = async () => {
     try {
-      const [questionsResponse, eventsResponse] = await Promise.all([
-        axios.get('/api/questions'),
-        axios.get('/api/events')
-      ]);
-      setQuestions(questionsResponse.data);
-      setEvents(eventsResponse.data);
+      const response = await axios.get('/api/questions');
+      setQuestions(response.data);
     } catch (error) {
-      console.error('Error fetching data:', error);
+      console.error('Error fetching questions:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const resetForm = () => {
+    setFormData({
+      title: '',
+      description: '',
+      solution: '',
+      difficulty: 'medium',
+      time_limit_minutes: 10,
+      tip_1: '',
+      tip_2: '',
+      image: null
+    });
+    setEditingQuestion(null);
+    setShowCreateForm(false);
   };
 
   const handleInputChange = (e) => {
@@ -54,6 +60,12 @@ const QuestionManagement = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (!formData.title || !formData.solution) {
+      alert('Titel und Lösung sind erforderlich');
+      return;
+    }
+
     try {
       const submitData = new FormData();
       Object.keys(formData).forEach(key => {
@@ -62,45 +74,74 @@ const QuestionManagement = () => {
         }
       });
 
-      await axios.post('/api/questions', submitData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      if (editingQuestion) {
+        await axios.put(`/api/questions/${editingQuestion.id}`, submitData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        alert('Frage erfolgreich aktualisiert!');
+      } else {
+        await axios.post('/api/questions', submitData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        alert('Frage erfolgreich erstellt!');
+      }
 
-      setShowCreateForm(false);
-      setFormData({
-        event_id: '',
-        question_text: '',
-        solution: '',
-        difficulty_level: 1,
-        time_limit_minutes: 10,
-        tip1: '',
-        tip2: '',
-        image: null
-      });
-      fetchData(); // Refresh data
-      alert('Frage erfolgreich erstellt!');
+      resetForm();
+      fetchQuestions();
     } catch (error) {
-      console.error('Error creating question:', error);
-      alert('Fehler beim Erstellen der Frage: ' + (error.response?.data?.error || error.message));
+      console.error('Error saving question:', error);
+      alert('Fehler beim Speichern der Frage: ' + (error.response?.data?.error || error.message));
     }
+  };
+
+  const handleEdit = (question) => {
+    setFormData({
+      title: question.title,
+      description: question.description || '',
+      solution: question.solution,
+      difficulty: question.difficulty,
+      time_limit_minutes: Math.round(question.time_limit_seconds / 60),
+      tip_1: question.tip_1 || '',
+      tip_2: question.tip_2 || '',
+      image: null
+    });
+    setEditingQuestion(question);
+    setShowCreateForm(true);
   };
 
   const handleDelete = async (questionId) => {
     if (window.confirm('Sind Sie sicher, dass Sie diese Frage löschen möchten?')) {
       try {
         await axios.delete(`/api/questions/${questionId}`);
-        fetchData(); // Refresh data
         alert('Frage erfolgreich gelöscht!');
+        fetchQuestions();
       } catch (error) {
         console.error('Error deleting question:', error);
-        alert('Fehler beim Löschen der Frage');
+        if (error.response?.status === 400) {
+          alert('Diese Frage kann nicht gelöscht werden, da sie in einem oder mehreren Events verwendet wird.');
+        } else {
+          alert('Fehler beim Löschen der Frage');
+        }
       }
     }
   };
 
-  const filteredQuestions = selectedEventId 
-    ? questions.filter(q => q.event_id.toString() === selectedEventId)
-    : questions;
+  const getDifficultyColor = (difficulty) => {
+    switch (difficulty) {
+      case 'easy': return 'text-green-400';
+      case 'hard': return 'text-red-400';
+      default: return 'text-yellow-400';
+    }
+  };
+
+  const getDifficultyText = (difficulty) => {
+    switch (difficulty) {
+      case 'easy': return 'Leicht';
+      case 'medium': return 'Mittel';
+      case 'hard': return 'Schwer';
+      default: return difficulty;
+    }
+  };
 
   if (loading) {
     return (
@@ -119,44 +160,161 @@ const QuestionManagement = () => {
             <Link to="/admin/dashboard" className="text-blue-400 hover:text-blue-300 mb-2 inline-block">
               ← Zurück zum Dashboard
             </Link>
-                         <h1 className="text-3xl font-bold text-white">
-               {eventId ? `Fragen für Event verwalten` : 'Alle Fragen verwalten'}
-             </h1>
+            <h1 className="text-3xl font-bold text-white">Fragenkatalog verwalten</h1>
+            <p className="text-gray-300 mt-2">
+              Erstellen Sie Fragen unabhängig von Events. Diese können dann bei der Event-Erstellung zugeordnet werden.
+            </p>
           </div>
           <button
             onClick={() => setShowCreateForm(true)}
-            className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg transition-colors"
+            className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg transition-colors flex items-center"
           >
-            ➕ Neue Frage erstellen
+            <Plus className="w-5 h-5 mr-2" />
+            Neue Frage erstellen
           </button>
         </div>
 
-        {/* Event Filter */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 mb-6">
-          <label className="block text-white font-medium mb-2">Nach Event filtern:</label>
-          <select
-            value={selectedEventId}
-            onChange={(e) => setSelectedEventId(e.target.value)}
-            className="w-full md:w-auto bg-white/20 text-white border border-white/30 rounded-lg px-4 py-2"
-          >
-            <option value="">Alle Events</option>
-            {events.map(event => (
-              <option key={event.id} value={event.id}>{event.name}</option>
-            ))}
-          </select>
-        </div>
+        {/* Create/Edit Form */}
+        {showCreateForm && (
+          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 mb-6">
+            <h2 className="text-xl font-bold text-white mb-4">
+              {editingQuestion ? 'Frage bearbeiten' : 'Neue Frage erstellen'}
+            </h2>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-white font-medium mb-2">Titel *</label>
+                  <input
+                    type="text"
+                    name="title"
+                    value={formData.title}
+                    onChange={handleInputChange}
+                    className="w-full bg-white/20 text-white border border-white/30 rounded-lg px-4 py-2 placeholder-gray-400"
+                    placeholder="Kurzer Titel für die Frage"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-white font-medium mb-2">Schwierigkeit</label>
+                  <select
+                    name="difficulty"
+                    value={formData.difficulty}
+                    onChange={handleInputChange}
+                    className="w-full bg-white/20 text-white border border-white/30 rounded-lg px-4 py-2"
+                  >
+                    <option value="easy">Leicht</option>
+                    <option value="medium">Mittel</option>
+                    <option value="hard">Schwer</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-white font-medium mb-2">Beschreibung</label>
+                <textarea
+                  name="description"
+                  value={formData.description}
+                  onChange={handleInputChange}
+                  rows="3"
+                  className="w-full bg-white/20 text-white border border-white/30 rounded-lg px-4 py-2 placeholder-gray-400"
+                  placeholder="Detaillierte Beschreibung der Frage"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-white font-medium mb-2">Lösung *</label>
+                  <input
+                    type="text"
+                    name="solution"
+                    value={formData.solution}
+                    onChange={handleInputChange}
+                    className="w-full bg-white/20 text-white border border-white/30 rounded-lg px-4 py-2 placeholder-gray-400"
+                    placeholder="Die korrekte Antwort"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-white font-medium mb-2">Zeitlimit (Minuten)</label>
+                  <input
+                    type="number"
+                    name="time_limit_minutes"
+                    value={formData.time_limit_minutes}
+                    onChange={handleInputChange}
+                    min="1"
+                    max="60"
+                    className="w-full bg-white/20 text-white border border-white/30 rounded-lg px-4 py-2"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-white font-medium mb-2">Tipp 1</label>
+                  <input
+                    type="text"
+                    name="tip_1"
+                    value={formData.tip_1}
+                    onChange={handleInputChange}
+                    className="w-full bg-white/20 text-white border border-white/30 rounded-lg px-4 py-2 placeholder-gray-400"
+                    placeholder="Erster Hinweis (optional)"
+                  />
+                </div>
+                <div>
+                  <label className="block text-white font-medium mb-2">Tipp 2</label>
+                  <input
+                    type="text"
+                    name="tip_2"
+                    value={formData.tip_2}
+                    onChange={handleInputChange}
+                    className="w-full bg-white/20 text-white border border-white/30 rounded-lg px-4 py-2 placeholder-gray-400"
+                    placeholder="Zweiter Hinweis (optional)"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-white font-medium mb-2">Bild (optional)</label>
+                <input
+                  type="file"
+                  name="image"
+                  onChange={handleInputChange}
+                  accept="image/*"
+                  className="w-full bg-white/20 text-white border border-white/30 rounded-lg px-4 py-2"
+                />
+                <p className="text-gray-400 text-sm mt-1">
+                  Unterstützte Formate: JPG, PNG, GIF, WebP (max. 5MB)
+                </p>
+              </div>
+
+              <div className="flex space-x-4">
+                <button
+                  type="submit"
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors"
+                >
+                  {editingQuestion ? 'Aktualisieren' : 'Erstellen'}
+                </button>
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded-lg transition-colors"
+                >
+                  Abbrechen
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
 
         {/* Questions List */}
         <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6">
           <h2 className="text-xl font-bold text-white mb-4">
-            Fragen ({filteredQuestions.length})
+            Alle Fragen ({questions.length})
           </h2>
           
-          {filteredQuestions.length === 0 ? (
+          {questions.length === 0 ? (
             <div className="text-center py-8">
-              <p className="text-gray-400 mb-4">
-                {selectedEventId ? 'Keine Fragen für dieses Event gefunden.' : 'Noch keine Fragen erstellt.'}
-              </p>
+              <p className="text-gray-400 mb-4">Noch keine Fragen erstellt.</p>
               <button
                 onClick={() => setShowCreateForm(true)}
                 className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg transition-colors"
@@ -165,176 +323,71 @@ const QuestionManagement = () => {
               </button>
             </div>
           ) : (
-            <div className="space-y-4">
-              {filteredQuestions.map((question) => (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {questions.map((question) => (
                 <div key={question.id} className="bg-white/5 rounded-lg p-4">
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                                             <h3 className="text-white font-medium mb-2">{question.title}</h3>
-                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-400">
-                         <div>
-                           <span className="font-medium">Event:</span> {events.find(e => e.id === question.event_id)?.name || 'Unbekannt'}
-                         </div>
-                         <div>
-                           <span className="font-medium">Schwierigkeit:</span> {question.difficulty}
-                         </div>
-                         <div>
-                           <span className="font-medium">Zeitlimit:</span> {Math.round(question.time_limit_seconds / 60)} Min
-                         </div>
-                       </div>
-                       <div className="mt-2 text-sm text-gray-400">
-                         <span className="font-medium">Lösung:</span> {question.solution}
-                       </div>
-                       {question.image_path && (
-                         <div className="mt-2 text-sm text-green-400">
-                           📷 Bild vorhanden: {question.image_path}
-                         </div>
-                       )}
-                    </div>
-                    <div className="flex space-x-2 ml-4">
+                  <div className="flex justify-between items-start mb-3">
+                    <h3 className="text-white font-medium text-lg">{question.title}</h3>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => handleEdit(question)}
+                        className="text-blue-400 hover:text-blue-300 p-1"
+                        title="Bearbeiten"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
                       <button
                         onClick={() => handleDelete(question.id)}
-                        className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm transition-colors"
+                        className="text-red-400 hover:text-red-300 p-1"
+                        title="Löschen"
                       >
-                        Löschen
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
+                  </div>
+                  
+                  {question.description && (
+                    <p className="text-gray-300 text-sm mb-3 line-clamp-2">
+                      {question.description}
+                    </p>
+                  )}
+                  
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-400">Schwierigkeit:</span>
+                      <span className={`font-medium ${getDifficultyColor(question.difficulty)}`}>
+                        <Star className="w-4 h-4 inline mr-1" />
+                        {getDifficultyText(question.difficulty)}
+                      </span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-400">Zeitlimit:</span>
+                      <span className="text-white">
+                        <Clock className="w-4 h-4 inline mr-1" />
+                        {Math.round(question.time_limit_seconds / 60)} Min
+                      </span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-400">Lösung:</span>
+                      <span className="text-green-400 font-medium">
+                        {question.solution}
+                      </span>
+                    </div>
+                    
+                    {question.image_path && (
+                      <div className="flex items-center text-purple-400">
+                        <FileImage className="w-4 h-4 mr-1" />
+                        <span className="text-sm">Bild vorhanden</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
             </div>
           )}
         </div>
-
-        {/* Create Question Modal */}
-        {showCreateForm && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-            <div className="bg-gray-900 rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-              <h2 className="text-2xl font-bold text-white mb-6">Neue Frage erstellen</h2>
-              
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-white font-medium mb-2">Event *</label>
-                  <select
-                    name="event_id"
-                    value={formData.event_id}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full bg-white/20 text-white border border-white/30 rounded-lg px-4 py-2"
-                  >
-                    <option value="">Event auswählen</option>
-                    {events.map(event => (
-                      <option key={event.id} value={event.id}>{event.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-white font-medium mb-2">Frage *</label>
-                  <textarea
-                    name="question_text"
-                    value={formData.question_text}
-                    onChange={handleInputChange}
-                    required
-                    rows="3"
-                    className="w-full bg-white/20 text-white border border-white/30 rounded-lg px-4 py-2"
-                    placeholder="Beschreiben Sie die Aufgabe oder das Rätsel..."
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-white font-medium mb-2">Lösung *</label>
-                  <input
-                    type="text"
-                    name="solution"
-                    value={formData.solution}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full bg-white/20 text-white border border-white/30 rounded-lg px-4 py-2"
-                    placeholder="Die korrekte Antwort"
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-white font-medium mb-2">Schwierigkeit (1-5)</label>
-                    <input
-                      type="number"
-                      name="difficulty_level"
-                      value={formData.difficulty_level}
-                      onChange={handleInputChange}
-                      min="1"
-                      max="5"
-                      className="w-full bg-white/20 text-white border border-white/30 rounded-lg px-4 py-2"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-white font-medium mb-2">Zeitlimit (Minuten)</label>
-                    <input
-                      type="number"
-                      name="time_limit_minutes"
-                      value={formData.time_limit_minutes}
-                      onChange={handleInputChange}
-                      min="1"
-                      className="w-full bg-white/20 text-white border border-white/30 rounded-lg px-4 py-2"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-white font-medium mb-2">Tipp 1 (optional)</label>
-                  <input
-                    type="text"
-                    name="tip1"
-                    value={formData.tip1}
-                    onChange={handleInputChange}
-                    className="w-full bg-white/20 text-white border border-white/30 rounded-lg px-4 py-2"
-                    placeholder="Erster Hinweis"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-white font-medium mb-2">Tipp 2 (optional)</label>
-                  <input
-                    type="text"
-                    name="tip2"
-                    value={formData.tip2}
-                    onChange={handleInputChange}
-                    className="w-full bg-white/20 text-white border border-white/30 rounded-lg px-4 py-2"
-                    placeholder="Zweiter Hinweis"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-white font-medium mb-2">Bild (optional)</label>
-                  <input
-                    type="file"
-                    name="image"
-                    onChange={handleInputChange}
-                    accept="image/*"
-                    className="w-full bg-white/20 text-white border border-white/30 rounded-lg px-4 py-2"
-                  />
-                </div>
-
-                <div className="flex justify-end space-x-4 pt-4">
-                  <button
-                    type="button"
-                    onClick={() => setShowCreateForm(false)}
-                    className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded-lg transition-colors"
-                  >
-                    Abbrechen
-                  </button>
-                  <button
-                    type="submit"
-                    className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg transition-colors"
-                  >
-                    Frage erstellen
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

@@ -135,7 +135,7 @@ router.get('/:id/stats', authenticateToken, async (req, res) => {
       .count('id as team_count')
       .first();
 
-    const questionCount = await knex('questions')
+    const questionCount = await knex('event_questions')
       .where({ event_id: req.params.id })
       .count('id as question_count')
       .first();
@@ -146,6 +146,83 @@ router.get('/:id/stats', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error('Get event stats error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get questions assigned to event
+router.get('/:id/questions', authenticateToken, async (req, res) => {
+  try {
+    const questions = await knex('questions')
+      .join('event_questions', 'questions.id', 'event_questions.question_id')
+      .where('event_questions.event_id', req.params.id)
+      .select('questions.*', 'event_questions.order_index', 'event_questions.id as assignment_id')
+      .orderBy('event_questions.order_index');
+    
+    res.json(questions);
+  } catch (error) {
+    console.error('Get event questions error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Assign questions to event
+router.post('/:id/questions', authenticateToken, async (req, res) => {
+  try {
+    const { questionIds } = req.body; // Array of question IDs in desired order
+    
+    if (!Array.isArray(questionIds) || questionIds.length === 0) {
+      return res.status(400).json({ error: 'Question IDs array is required' });
+    }
+
+    // Start transaction
+    await knex.transaction(async (trx) => {
+      // Remove existing question assignments
+      await trx('event_questions')
+        .where({ event_id: req.params.id })
+        .del();
+
+      // Add new assignments with order
+      const assignments = questionIds.map((questionId, index) => ({
+        event_id: parseInt(req.params.id),
+        question_id: parseInt(questionId),
+        order_index: index + 1
+      }));
+
+      await trx('event_questions').insert(assignments);
+    });
+
+    // Return updated questions
+    const questions = await knex('questions')
+      .join('event_questions', 'questions.id', 'event_questions.question_id')
+      .where('event_questions.event_id', req.params.id)
+      .select('questions.*', 'event_questions.order_index')
+      .orderBy('event_questions.order_index');
+    
+    res.json(questions);
+  } catch (error) {
+    console.error('Assign questions error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Remove question from event
+router.delete('/:id/questions/:questionId', authenticateToken, async (req, res) => {
+  try {
+    const deleted = await knex('event_questions')
+      .where({ 
+        event_id: req.params.id,
+        question_id: req.params.questionId 
+      })
+      .del();
+
+    if (!deleted) {
+      return res.status(404).json({ error: 'Question assignment not found' });
+    }
+
+    res.json({ message: 'Question removed from event successfully' });
+  } catch (error) {
+    console.error('Remove question error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
