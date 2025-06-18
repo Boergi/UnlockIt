@@ -1,0 +1,153 @@
+const express = require('express');
+const { authenticateToken } = require('./auth');
+const router = express.Router();
+
+const knex = require('knex')(require('../knexfile')[process.env.NODE_ENV || 'development']);
+
+// Get all events
+router.get('/', authenticateToken, async (req, res) => {
+  try {
+    const events = await knex('events')
+      .select('*')
+      .orderBy('created_at', 'desc');
+    res.json(events);
+  } catch (error) {
+    console.error('Get events error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get dashboard stats (must be before /:id route)
+router.get('/stats', authenticateToken, async (req, res) => {
+  try {
+    const [totalEvents, activeEvents, totalTeams, totalQuestions] = await Promise.all([
+      knex('events').count('id as count').first(),
+      knex('events')
+        .where('team_registration_open', true)
+        .andWhere('start_time', '>', knex.fn.now())
+        .count('id as count').first(),
+      knex('teams').count('id as count').first(),
+      knex('questions').count('id as count').first()
+    ]);
+
+    res.json({
+      totalEvents: parseInt(totalEvents.count),
+      activeEvents: parseInt(activeEvents.count),
+      totalTeams: parseInt(totalTeams.count),
+      totalQuestions: parseInt(totalQuestions.count)
+    });
+  } catch (error) {
+    console.error('Error fetching stats:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get single event
+router.get('/:id', async (req, res) => {
+  try {
+    const event = await knex('events')
+      .where({ id: req.params.id })
+      .first();
+    
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    res.json(event);
+  } catch (error) {
+    console.error('Get event error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Create new event
+router.post('/', authenticateToken, async (req, res) => {
+  try {
+    const { name, start_time, use_random_order, team_registration_open, access_code } = req.body;
+
+    if (!name || !start_time) {
+      return res.status(400).json({ error: 'Name and start time are required' });
+    }
+
+    const [eventId] = await knex('events').insert({
+      name,
+      start_time,
+      use_random_order: use_random_order || false,
+      team_registration_open: team_registration_open !== false,
+      access_code
+    });
+
+    const event = await knex('events').where({ id: eventId }).first();
+    res.status(201).json(event);
+  } catch (error) {
+    console.error('Create event error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Update event
+router.put('/:id', authenticateToken, async (req, res) => {
+  try {
+    const { name, start_time, use_random_order, team_registration_open, access_code } = req.body;
+    
+    await knex('events')
+      .where({ id: req.params.id })
+      .update({
+        name,
+        start_time,
+        use_random_order,
+        team_registration_open,
+        access_code,
+        updated_at: knex.fn.now()
+      });
+
+    const event = await knex('events').where({ id: req.params.id }).first();
+    res.json(event);
+  } catch (error) {
+    console.error('Update event error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Delete event
+router.delete('/:id', authenticateToken, async (req, res) => {
+  try {
+    const deleted = await knex('events')
+      .where({ id: req.params.id })
+      .del();
+
+    if (!deleted) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    res.json({ message: 'Event deleted successfully' });
+  } catch (error) {
+    console.error('Delete event error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get event statistics
+router.get('/:id/stats', authenticateToken, async (req, res) => {
+  try {
+    const stats = await knex('teams')
+      .where({ event_id: req.params.id })
+      .count('id as team_count')
+      .first();
+
+    const questionCount = await knex('questions')
+      .where({ event_id: req.params.id })
+      .count('id as question_count')
+      .first();
+
+    res.json({
+      teams: stats.team_count || 0,
+      questions: questionCount.question_count || 0
+    });
+  } catch (error) {
+    console.error('Get event stats error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+module.exports = router; 
