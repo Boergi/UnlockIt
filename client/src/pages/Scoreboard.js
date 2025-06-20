@@ -1,19 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useSocket } from '../contexts/SocketContext';
 import axios from 'axios';
-import { Trophy, Medal, Award, Users, Target, Clock } from 'lucide-react';
+import { Trophy, Medal, Award, Users, Target, Clock, ArrowLeft } from 'lucide-react';
 
 const Scoreboard = () => {
   const { eventId } = useParams();
+  const navigate = useNavigate();
   const { joinEvent, onScoreboardUpdate } = useSocket();
   
   const [event, setEvent] = useState(null);
   const [scoreboard, setScoreboard] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [currentTeam, setCurrentTeam] = useState(null);
 
   useEffect(() => {
     loadEventAndScoreboard();
+    loadCurrentTeam();
     joinEvent(eventId);
 
     // Listen for real-time updates
@@ -31,6 +34,31 @@ const Scoreboard = () => {
       clearInterval(interval);
     };
   }, [eventId]);
+
+  const loadCurrentTeam = () => {
+    try {
+      const teamData = localStorage.getItem('currentTeam');
+      if (teamData) {
+        const team = JSON.parse(teamData);
+        // Only set current team if it matches the current event
+        if (team.eventId === parseInt(eventId)) {
+          setCurrentTeam(team);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading current team from localStorage:', error);
+    }
+  };
+
+  const goBack = () => {
+    if (currentTeam) {
+      // Navigate back to team page
+      navigate(`/team/${currentTeam.teamId}/event/${currentTeam.eventId}`);
+    } else {
+      // Navigate back to event page
+      navigate(`/events/${eventId}`);
+    }
+  };
 
   const loadEventAndScoreboard = async () => {
     try {
@@ -97,6 +125,17 @@ const Scoreboard = () => {
   return (
     <div className="min-h-screen p-4">
       <div className="max-w-4xl mx-auto">
+        {/* Back Button */}
+        <div className="mb-6">
+          <button
+            onClick={goBack}
+            className="flex items-center px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-all duration-200"
+          >
+            <ArrowLeft className="w-5 h-5 mr-2" />
+            {currentTeam ? 'Zurück zum Team' : 'Zurück zum Event'}
+          </button>
+        </div>
+
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center mb-4">
