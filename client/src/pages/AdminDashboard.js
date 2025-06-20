@@ -1,14 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import ConfirmationModal from '../components/ConfirmationModal';
+import QRCode from 'qrcode';
+import { QrCode, Download, X } from 'lucide-react';
 
 const AdminDashboard = () => {
   const { user, logout } = useAuth();
   const [events, setEvents] = useState([]);
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, eventId: null });
+  const [qrModal, setQrModal] = useState({ isOpen: false, event: null, qrCodeUrl: '' });
+  const canvasRef = useRef(null);
   const [stats, setStats] = useState({
     totalEvents: 0,
     activeEvents: 0,
@@ -61,6 +65,50 @@ const AdminDashboard = () => {
     } finally {
       setConfirmModal({ isOpen: false, eventId: null });
     }
+  };
+
+  const handleQRCodeClick = async (event) => {
+    try {
+      // Generate event page URL
+      const eventUrl = `${window.location.origin}/events/${event.id}`;
+      
+      // Generate QR code
+      const qrCodeDataUrl = await QRCode.toDataURL(eventUrl, {
+        width: 300,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      });
+
+      setQrModal({
+        isOpen: true,
+        event: event,
+        qrCodeUrl: qrCodeDataUrl
+      });
+    } catch (error) {
+      console.error('Error generating QR code:', error);
+      toast.error('Fehler beim Generieren des QR-Codes');
+    }
+  };
+
+  const handleDownloadQRCode = () => {
+    if (!qrModal.qrCodeUrl || !qrModal.event) return;
+
+    // Create download link
+    const link = document.createElement('a');
+    link.download = `QR-Code-${qrModal.event.name.replace(/[^a-zA-Z0-9]/g, '_')}.png`;
+    link.href = qrModal.qrCodeUrl;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast.success('QR-Code heruntergeladen!');
+  };
+
+  const closeQRModal = () => {
+    setQrModal({ isOpen: false, event: null, qrCodeUrl: '' });
   };
 
   if (loading) {
@@ -156,19 +204,47 @@ const AdminDashboard = () => {
             <div className="space-y-4">
               {events.slice(0, 5).map((event) => (
                 <div key={event.id} className="bg-white/5 rounded-lg p-4 flex justify-between items-center">
-                  <div>
-                    <h3 className="text-white font-medium">{event.name}</h3>
-                    <p className="text-gray-400 text-sm">
-                      {new Date(event.start_time).toLocaleDateString('de-DE')} - 
-                      {new Date(event.end_time).toLocaleDateString('de-DE')}
-                    </p>
-                    <p className="text-gray-400 text-sm">
-                       Status: <span className={event.team_registration_open ? 'text-green-400' : 'text-red-400'}>
-                         {event.team_registration_open ? 'Registrierung offen' : 'Registrierung geschlossen'}
-                       </span>
-                     </p>
+                  <div className="flex items-center space-x-4">
+                    {/* Event Logo */}
+                    {event.logo_url && (
+                      <div className="relative">
+                        <img
+                          src={`http://localhost:3001${event.logo_url}`}
+                          alt={`${event.name} Logo`}
+                          className="w-12 h-12 rounded-lg object-cover"
+                          onError={(e) => { e.target.style.display = 'none' }}
+                        />
+                        {event.ai_logo_generated && (
+                          <div className="absolute -top-1 -right-1 w-4 h-4 bg-purple-500 rounded-full flex items-center justify-center">
+                            <span className="text-xs text-white">✨</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
+                    <div>
+                      <h3 className="text-white font-medium">{event.name}</h3>
+                      <p className="text-gray-400 text-sm">
+                        {new Date(event.start_time).toLocaleDateString('de-DE')} - 
+                        {new Date(event.end_time).toLocaleDateString('de-DE')}
+                      </p>
+                      <p className="text-gray-400 text-sm">
+                         Status: <span className={event.team_registration_open ? 'text-green-400' : 'text-red-400'}>
+                           {event.team_registration_open ? 'Registrierung offen' : 'Registrierung geschlossen'}
+                         </span>
+                       </p>
+                    </div>
                   </div>
+                  
                   <div className="flex space-x-2">
+                    <button
+                      onClick={() => handleQRCodeClick(event)}
+                      className="bg-cyan-600 hover:bg-cyan-700 text-white px-3 py-1 rounded text-sm transition-colors flex items-center space-x-1"
+                      title="QR-Code anzeigen"
+                    >
+                      <QrCode size={16} />
+                      <span>QR</span>
+                    </button>
                     <Link
                       to={`/admin/events/${event.id}`}
                       className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm transition-colors"
@@ -194,6 +270,65 @@ const AdminDashboard = () => {
           )}
         </div>
 
+        {/* QR Code Modal */}
+        {qrModal.isOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+              {/* Header */}
+              <div className="flex items-center justify-between p-6 border-b">
+                <h2 className="text-xl font-semibold text-gray-900">
+                  QR-Code für "{qrModal.event?.name}"
+                </h2>
+                <button
+                  onClick={closeQRModal}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              {/* QR Code */}
+              <div className="p-6 text-center">
+                <div className="bg-white p-4 rounded-lg shadow-inner mb-4 inline-block">
+                  <img
+                    src={qrModal.qrCodeUrl}
+                    alt="QR Code"
+                    className="w-64 h-64 mx-auto"
+                  />
+                </div>
+                
+                <p className="text-gray-600 text-sm mb-2">
+                  Teilnehmer können diesen QR-Code scannen, um direkt zur Event-Seite zu gelangen
+                </p>
+                
+                <div className="bg-gray-100 rounded-lg p-3 mb-4">
+                  <p className="text-xs text-gray-500 mb-1">Event-URL:</p>
+                  <p className="text-sm font-mono text-gray-700 break-all">
+                    {window.location.origin}/events/{qrModal.event?.id}
+                  </p>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex space-x-3">
+                  <button
+                    onClick={handleDownloadQRCode}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center justify-center space-x-2"
+                  >
+                    <Download size={16} />
+                    <span>QR-Code herunterladen</span>
+                  </button>
+                  <button
+                    onClick={closeQRModal}
+                    className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded-lg transition-colors"
+                  >
+                    Schließen
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Confirmation Modal */}
         <ConfirmationModal
           isOpen={confirmModal.isOpen}
@@ -210,4 +345,4 @@ const AdminDashboard = () => {
   );
 };
 
-export default AdminDashboard; 
+export default AdminDashboard;
