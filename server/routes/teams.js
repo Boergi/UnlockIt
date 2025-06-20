@@ -579,20 +579,50 @@ router.get('/:id/progress', async (req, res) => {
       return res.status(404).json({ error: 'Team not found' });
     }
 
-    const progress = await knex('team_progress')
-      .join('questions', 'team_progress.question_id', 'questions.id')
+    // Get all questions for the event with their progress (if any)
+    const questionsWithProgress = await knex('questions')
       .join('event_questions', 'questions.id', 'event_questions.question_id')
-      .where({ 
-        team_id: req.params.id,
-        'event_questions.event_id': team.event_id 
+      .leftJoin('team_progress', function() {
+        this.on('questions.id', '=', 'team_progress.question_id')
+            .andOn('team_progress.team_id', '=', knex.raw('?', [req.params.id]));
       })
+      .where('event_questions.event_id', team.event_id)
       .select(
-        'team_progress.*',
+        'questions.id as question_id',
         'questions.title as question_title',
         'questions.difficulty',
-        'event_questions.order_index'
+        'event_questions.order_index',
+        'team_progress.id as progress_id',
+        'team_progress.attempt_1',
+        'team_progress.attempt_2',
+        'team_progress.attempt_3',
+        'team_progress.used_tip',
+        'team_progress.correct',
+        'team_progress.completed',
+        'team_progress.time_started',
+        'team_progress.time_answered',
+        'team_progress.points_awarded'
       )
       .orderBy('event_questions.order_index');
+
+    // Transform the data to match the expected format
+    const progress = questionsWithProgress.map(row => ({
+      id: row.progress_id,
+      team_id: req.params.id,
+      question_id: row.question_id,
+      question_title: row.question_title,
+      difficulty: row.difficulty,
+      order_index: row.order_index,
+      attempt_1: row.attempt_1,
+      attempt_2: row.attempt_2,
+      attempt_3: row.attempt_3,
+      used_tip: row.used_tip || 0,
+      correct: row.correct || false,
+      completed: row.completed || false,
+      time_started: row.time_started,
+      time_answered: row.time_answered,
+      points_awarded: row.points_awarded || 0
+    }));
 
     res.json(progress);
   } catch (error) {

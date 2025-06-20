@@ -28,7 +28,6 @@ const TeamEventPage = () => {
   
   const [team, setTeam] = useState(null);
   const [event, setEvent] = useState(null);
-  const [questions, setQuestions] = useState([]);
   const [currentQuestion, setCurrentQuestion] = useState(null);
   const [teamProgress, setTeamProgress] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -51,24 +50,11 @@ const TeamEventPage = () => {
 
   useEffect(() => {
     if (isEventStarted && !isEventEnded) {
-      loadQuestions();
       loadTeamProgress();
     }
   }, [isEventStarted, isEventEnded]);
 
-  // Set current question when questions are loaded but no progress exists
-  useEffect(() => {
-    if (questions.length > 0 && teamProgress.length === 0 && isEventStarted) {
-      // If no progress exists, set first question as current
-      setCurrentQuestion({
-        id: questions[0].id,
-        question_title: questions[0].title,
-        difficulty: questions[0].difficulty,
-        attempts: 0,
-        completed: false
-      });
-    }
-  }, [questions, teamProgress, isEventStarted]);
+
 
   // Socket.IO listeners for real-time updates
   useEffect(() => {
@@ -128,23 +114,18 @@ const TeamEventPage = () => {
     }
   };
 
-  const loadQuestions = async () => {
-    try {
-      const response = await axios.get(`/api/events/${eventId}/questions`);
-      setQuestions(response.data);
-    } catch (error) {
-      console.error('Error loading questions:', error);
-    }
-  };
-
   const loadTeamProgress = async () => {
     try {
       const response = await axios.get(`/api/teams/${teamId}/progress`);
       setTeamProgress(response.data);
       
-      // Find current question (first unanswered)
+      // Find current question (first not completed)
+      // This now includes questions that haven't been started yet
       const currentQ = response.data.find(q => !q.completed);
       setCurrentQuestion(currentQ);
+      
+      console.log('Team progress loaded:', response.data);
+      console.log('Current question:', currentQ);
     } catch (error) {
       console.error('Error loading team progress:', error);
     }
@@ -366,17 +347,21 @@ const TeamEventPage = () => {
               <h2 className="text-lg font-semibold text-white">Team Fortschritt</h2>
             </div>
 
-            {questions.length > 0 ? (
+            {teamProgress.length > 0 ? (
               <div className="space-y-2">
                 <div className="flex justify-between text-sm text-gray-300">
                   <span>Gelöste Fragen:</span>
-                  <span>{teamProgress.filter(q => q.correct).length} / {questions.length}</span>
+                  <span className="text-green-400">{teamProgress.filter(q => q.correct).length} / {teamProgress.length}</span>
+                </div>
+                <div className="flex justify-between text-sm text-gray-300">
+                  <span>Abgeschlossene Fragen:</span>
+                  <span>{teamProgress.filter(q => q.completed).length} / {teamProgress.length}</span>
                 </div>
                 <div className="w-full bg-gray-700 rounded-full h-2">
                   <div 
                     className="bg-green-600 h-2 rounded-full transition-all duration-500"
                     style={{ 
-                      width: `${questions.length > 0 ? (teamProgress.filter(q => q.correct).length / questions.length) * 100 : 0}%` 
+                      width: `${teamProgress.length > 0 ? (teamProgress.filter(q => q.correct).length / teamProgress.length) * 100 : 0}%` 
                     }}
                   ></div>
                 </div>
@@ -456,21 +441,35 @@ const TeamEventPage = () => {
             <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-gray-600">
               <h2 className="text-xl font-bold text-white mb-4">Fragen Übersicht</h2>
               
-              {questions.length > 0 ? (
+              {teamProgress.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {questions.map((question, index) => {
-                    // Find progress for this question
-                    const progress = teamProgress.find(p => p.question_id === question.id);
-                    const completed = progress?.correct || false;
+                  {teamProgress.map((progress, index) => {
+                    const isCorrect = progress?.correct || false;
+                    const isCompleted = progress?.completed || false;
                     const attempts = progress ? [progress.attempt_1, progress.attempt_2, progress.attempt_3].filter(Boolean).length : 0;
                     const pointsEarned = progress?.points_awarded || 0;
+                    const usedTip = progress?.used_tip || 0;
+                    
+                    // Determine completion reason for display
+                    let completionReason = '';
+                    if (isCompleted && !isCorrect) {
+                      if (usedTip >= 3) {
+                        completionReason = 'Lösung verwendet';
+                      } else if (attempts >= 3) {
+                        completionReason = 'Alle Versuche aufgebraucht';
+                      } else {
+                        completionReason = 'Zeit abgelaufen';
+                      }
+                    }
                     
                     return (
                       <div
-                        key={question.id}
+                        key={progress.question_id}
                         className={`p-4 rounded-lg border ${
-                          completed
+                          isCorrect
                             ? 'bg-green-500/20 border-green-500/30'
+                            : isCompleted
+                            ? 'bg-red-500/20 border-red-500/30'
                             : attempts > 0
                             ? 'bg-yellow-500/20 border-yellow-500/30'
                             : 'bg-white/5 border-gray-600'
@@ -478,10 +477,12 @@ const TeamEventPage = () => {
                       >
                         <div className="flex items-center justify-between mb-2">
                           <h3 className="font-semibold text-white">
-                            {index + 1}. {question.title}
+                            {index + 1}. {progress.question_title}
                           </h3>
-                          {completed ? (
+                          {isCorrect ? (
                             <CheckCircle className="w-5 h-5 text-green-400" />
+                          ) : isCompleted ? (
+                            <XCircle className="w-5 h-5 text-red-400" />
                           ) : attempts > 0 ? (
                             <AlertCircle className="w-5 h-5 text-yellow-400" />
                           ) : (
@@ -489,14 +490,21 @@ const TeamEventPage = () => {
                           )}
                         </div>
                         <div className="flex justify-between text-sm text-gray-300">
-                          <span>Schwierigkeit: {question.difficulty}</span>
+                          <span>Schwierigkeit: {progress.difficulty}</span>
                           <span>
-                            {completed 
+                            {isCorrect 
                               ? `${pointsEarned} Punkte` 
+                              : isCompleted
+                              ? `0 Punkte (${completionReason})`
                               : `Versuche: ${attempts}/3`
                             }
                           </span>
                         </div>
+                        {isCompleted && !isCorrect && (
+                          <div className="mt-2 text-xs text-red-300">
+                            {completionReason}
+                          </div>
+                        )}
                       </div>
                     );
                   })}

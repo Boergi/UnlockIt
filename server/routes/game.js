@@ -36,11 +36,11 @@ router.get('/team/:teamId/current-question', async (req, res) => {
       .where({ team_id: req.params.teamId });
 
     const completedQuestionIds = allProgress
-      .filter(p => p.correct)
+      .filter(p => p.correct || p.completed)
       .map(p => p.question_id);
 
-    // Check if there's an incomplete question (started but not answered correctly)
-    const incompleteProgress = allProgress.find(p => !p.correct);
+    // Check if there's an incomplete question (started but not completed)
+    const incompleteProgress = allProgress.find(p => !p.correct && !p.completed);
     
     if (incompleteProgress) {
       // Return the incomplete question with progress
@@ -201,6 +201,79 @@ router.get('/question/:questionId/tips/:teamId', async (req, res) => {
   }
 });
 
+// Check which tips are available for a question
+router.get('/question/:questionId/available-tips', async (req, res) => {
+  try {
+    const question = await knex('questions').where({ id: req.params.questionId }).first();
+    if (!question) {
+      return res.status(404).json({ error: 'Question not found' });
+    }
+
+    const availableTips = [];
+    for (let i = 1; i <= 3; i++) {
+      const tipField = `tip_${i}`;
+      if (question[tipField] && question[tipField].trim() !== '') {
+        availableTips.push(i);
+      }
+    }
+
+    res.json({ availableTips });
+  } catch (error) {
+    console.error('Get available tips error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Mark question as completed (for timeout or when solution tip is used)
+router.post('/question/:questionId/complete', async (req, res) => {
+  try {
+    const { teamId, reason } = req.body;
+
+    if (!teamId) {
+      return res.status(400).json({ error: 'Team ID is required' });
+    }
+
+    const question = await knex('questions').where({ id: req.params.questionId }).first();
+    if (!question) {
+      return res.status(404).json({ error: 'Question not found' });
+    }
+
+    // Check if progress exists
+    let progress = await knex('team_progress')
+      .where({ team_id: teamId, question_id: req.params.questionId })
+      .first();
+
+    if (!progress) {
+      // Create progress record if it doesn't exist
+      const [progressId] = await knex('team_progress').insert({
+        team_id: teamId,
+        question_id: req.params.questionId,
+        completed: true,
+        correct: false,
+        time_started: new Date(),
+        time_answered: new Date()
+      });
+    } else {
+      // Update existing progress to mark as completed
+      await knex('team_progress')
+        .where({ id: progress.id })
+        .update({ 
+          completed: true,
+          time_answered: progress.time_answered || new Date()
+        });
+    }
+
+    res.json({ 
+      completed: true, 
+      reason: reason || 'unknown',
+      message: 'Question marked as completed' 
+    });
+  } catch (error) {
+    console.error('Complete question error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Get tip for question
 router.post('/question/:questionId/tip', async (req, res) => {
   try {
@@ -241,7 +314,17 @@ router.post('/question/:questionId/tip', async (req, res) => {
     const tipField = `tip_${tipNumber}`;
     const tip = question[tipField];
 
-    res.json({ tip, tipNumber });
+    // If this is tip 3 (solution), mark the question as completed
+    if (tipNumber === 3) {
+      await knex('team_progress')
+        .where({ id: progress.id })
+        .update({ 
+          completed: true,
+          time_answered: new Date()
+        });
+    }
+
+    res.json({ tip, tipNumber, completed: tipNumber === 3 });
   } catch (error) {
     console.error('Get tip error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -322,6 +405,7 @@ router.post('/question/:questionId/answer', async (req, res) => {
         .where({ id: progress.id })
         .update({
           correct: true,
+          completed: true,
           time_answered: knex.fn.now(),
           points_awarded: points
         });

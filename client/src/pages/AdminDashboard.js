@@ -251,12 +251,14 @@ const AdminDashboard = () => {
                     >
                       Bearbeiten
                     </Link>
-                    <Link
-                      to={`/admin/events/${event.id}/scoreboard`}
+                    <a
+                      href={`http://localhost:3000/scoreboard/${event.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm transition-colors"
                     >
                       Scoreboard
-                    </Link>
+                    </a>
                     <button
                       onClick={() => handleDeleteClick(event.id)}
                       className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm transition-colors"

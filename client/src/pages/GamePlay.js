@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useSocket } from '../contexts/SocketContext';
 import axios from 'axios';
 import toast from 'react-hot-toast';
-import { Lock, Clock, Lightbulb, Send, CheckCircle, XCircle } from 'lucide-react';
+import { Lock, Clock, Lightbulb, Send, CheckCircle, XCircle, Trophy } from 'lucide-react';
 
 const GamePlay = () => {
   const { teamId } = useParams();
@@ -20,6 +20,11 @@ const GamePlay = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [gameCompleted, setGameCompleted] = useState(false);
+  const [teamScore, setTeamScore] = useState(0);
+  const [teamPosition, setTeamPosition] = useState(null);
+  const [availableTips, setAvailableTips] = useState([]);
+  const [questionCompleted, setQuestionCompleted] = useState(false);
+  const [completionReason, setCompletionReason] = useState(null);
 
   useEffect(() => {
     loadTeamAndQuestion();
@@ -32,6 +37,8 @@ const GamePlay = () => {
         setTimeLeft(prev => {
           if (prev <= 1) {
             toast.error('Zeit abgelaufen!');
+            // Mark question as completed due to timeout
+            completeQuestion('timeout');
             return 0;
           }
           return prev - 1;
@@ -40,6 +47,87 @@ const GamePlay = () => {
     }
     return () => clearInterval(timer);
   }, [timeLeft, currentQuestion, gameCompleted]);
+
+  // Load team score and position
+  const loadTeamScoreAndPosition = async () => {
+    if (!team) return;
+    
+    try {
+      const response = await axios.get(`/api/game/event/${team.event_id}/scoreboard`);
+      const scoreboard = response.data;
+      
+      // Find current team's position and score
+      const teamIndex = scoreboard.findIndex(t => t.id === parseInt(teamId));
+      if (teamIndex >= 0) {
+        setTeamPosition(teamIndex + 1);
+        setTeamScore(scoreboard[teamIndex].total_points || 0);
+      }
+    } catch (error) {
+      console.error('Error loading team score:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (team) {
+      loadTeamScoreAndPosition();
+      // Refresh score every 30 seconds
+      const interval = setInterval(loadTeamScoreAndPosition, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [team]);
+
+  // Load available tips for current question
+  const loadAvailableTips = async (questionId) => {
+    try {
+      const response = await axios.get(`/api/game/question/${questionId}/available-tips`);
+      setAvailableTips(response.data.availableTips);
+    } catch (error) {
+      console.error('Error loading available tips:', error);
+      setAvailableTips([]);
+    }
+  };
+
+  // Mark question as completed (for timeout or solution tip usage)
+  const completeQuestion = async (reason) => {
+    if (!currentQuestion || !team) return;
+    
+    try {
+      await axios.post(`/api/game/question/${currentQuestion.id}/complete`, {
+        teamId: team.id,
+        reason
+      });
+      
+      setQuestionCompleted(true);
+      setCompletionReason(reason);
+      
+      const reasonText = {
+        'timeout': 'Zeit abgelaufen',
+        'max_attempts': 'Alle Versuche aufgebraucht',
+        'solution': 'Lösung angezeigt'
+      }[reason] || reason;
+      
+      toast(`Frage abgeschlossen (${reasonText})`, {
+        icon: '⏰',
+        duration: 3000
+      });
+      
+    } catch (error) {
+      console.error('Error completing question:', error);
+      toast.error('Fehler beim Abschließen der Frage');
+    }
+  };
+
+  // Go to next question
+  const goToNextQuestion = () => {
+    setAnswer('');
+    setAttempts(0);
+    setUsedTips(0);
+    setTips([]);
+    setAvailableTips([]);
+    setQuestionCompleted(false);
+    setCompletionReason(null);
+    loadTeamAndQuestion();
+  };
 
   const loadTeamAndQuestion = async () => {
     try {
@@ -55,6 +143,13 @@ const GamePlay = () => {
         toast.success('Alle Rätsel gelöst! 🎉');
       } else {
         setCurrentQuestion(questionResponse.data);
+        
+        // Reset completion state for new question
+        setQuestionCompleted(false);
+        setCompletionReason(null);
+        
+        // Load available tips for this question
+        await loadAvailableTips(questionResponse.data.id);
         
         if (questionResponse.data.progress) {
           // Question already has progress - restore state
@@ -161,7 +256,13 @@ const GamePlay = () => {
       setUsedTips(tipNumber);
       
       if (tipNumber === 3) {
-        toast.warning('Achtung: Das ist die Lösung! (0 Punkte)');
+        toast('Achtung: Das ist die Lösung! (0 Punkte)', {
+          icon: '⚠️',
+          duration: 4000
+        });
+        // Question is automatically marked as completed by the backend
+        setQuestionCompleted(true);
+        setCompletionReason('solution');
       } else {
         toast(`Tipp ${tipNumber} erhalten (Punkte-Abzug)`, {
           icon: '💡',
@@ -201,14 +302,15 @@ const GamePlay = () => {
           points: response.data.points
         });
         
-        // Load next question after a short delay
-        setTimeout(() => {
-          setAnswer('');
-          setAttempts(0);
-          setUsedTips(0);
-          setTips([]);
-          loadTeamAndQuestion();
-        }, 2000);
+        // Update team score immediately
+        setTeamScore(prev => prev + response.data.points);
+        
+        // Mark as completed and show continue button
+        setQuestionCompleted(true);
+        setCompletionReason('correct');
+        
+        // Refresh position after question completion
+        loadTeamScoreAndPosition();
       } else {
         setAttempts(prev => prev + 1);
         toast.error(response.data.message);
@@ -217,6 +319,10 @@ const GamePlay = () => {
             icon: 'ℹ️',
             duration: 3000
           });
+        } else {
+          // No more attempts - mark question as completed
+          toast.error('Alle Versuche aufgebraucht!');
+          completeQuestion('max_attempts');
         }
         setAnswer('');
       }
@@ -275,6 +381,23 @@ const GamePlay = () => {
           <h1 className="text-3xl font-bold text-white mb-2">
             Team: {team?.name}
           </h1>
+          
+          {/* Position and Score */}
+          <div className="flex items-center justify-center space-x-6 mb-4">
+            <div className="flex items-center">
+              <Trophy className="w-5 h-5 text-yellow-400 mr-2" />
+              <span className="text-white font-semibold">
+                Position: {teamPosition ? `#${teamPosition}` : '--'}
+              </span>
+            </div>
+            <div className="flex items-center">
+              <span className="text-white font-semibold">
+                Punkte: {teamScore}
+              </span>
+            </div>
+          </div>
+
+          {/* Timer and Attempts */}
           <div className="flex items-center justify-center space-x-6">
             <div className="flex items-center">
               <Clock className="w-5 h-5 text-yellow-400 mr-2" />
@@ -323,86 +446,105 @@ const GamePlay = () => {
             </div>
 
             {/* Tips */}
-            <div className="mb-8">
-              <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
-                <Lightbulb className="w-5 h-5 text-yellow-400 mr-2" />
-                Tipps ({usedTips}/3)
-              </h3>
-              
-              <div className="grid gap-3">
-                {[1, 2, 3].map((tipNum) => (
-                  <div key={tipNum} className="flex items-center space-x-3">
-                    <button
-                      onClick={() => getTip(tipNum)}
-                      disabled={usedTips >= tipNum}
-                      className={`px-4 py-2 rounded-md font-medium transition-all duration-200 ${
-                        usedTips >= tipNum
-                          ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                          : tipNum === 3
-                          ? 'bg-red-600 hover:bg-red-700 text-white'
-                          : 'bg-blue-600 hover:bg-blue-700 text-white'
-                      }`}
-                    >
-                      Tipp {tipNum} {tipNum === 3 && '(Lösung)'}
-                    </button>
-                    
-                    {tips[tipNum - 1] && (
-                      <div className="flex-1 p-3 bg-black/30 rounded-md">
-                        <p className="text-gray-300">{tips[tipNum - 1]}</p>
-                      </div>
-                    )}
-                  </div>
-                ))}
+            {availableTips.length > 0 && (
+              <div className="mb-8">
+                <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
+                  <Lightbulb className="w-5 h-5 text-yellow-400 mr-2" />
+                  Tipps ({usedTips}/{availableTips.length})
+                </h3>
+                
+                <div className="grid gap-3">
+                  {availableTips.map((tipNum) => (
+                    <div key={tipNum} className="flex items-center space-x-3">
+                      <button
+                        onClick={() => getTip(tipNum)}
+                        disabled={usedTips >= tipNum || questionCompleted}
+                        className={`px-4 py-2 rounded-md font-medium transition-all duration-200 ${
+                          usedTips >= tipNum || questionCompleted
+                            ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                            : tipNum === 3
+                            ? 'bg-red-600 hover:bg-red-700 text-white'
+                            : 'bg-blue-600 hover:bg-blue-700 text-white'
+                        }`}
+                      >
+                        Tipp {tipNum} {tipNum === 3 && '(Lösung)'}
+                      </button>
+                      
+                      {tips[tipNum - 1] && (
+                        <div className="flex-1 p-3 bg-black/30 rounded-md">
+                          <p className="text-gray-300">{tips[tipNum - 1]}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* Answer Input */}
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Deine Antwort
-                </label>
-                <input
-                  type="text"
-                  value={answer}
-                  onChange={(e) => setAnswer(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && submitAnswer()}
-                  disabled={submitting || attempts >= 3 || timeLeft === 0}
-                  className="w-full px-4 py-3 bg-white/20 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-                  placeholder="Gib deine Antwort ein..."
-                />
+            {/* Answer Input or Continue Button */}
+            {questionCompleted ? (
+              <div className="space-y-4">
+                <div className="text-center p-6 bg-green-600/20 border border-green-600/30 rounded-lg">
+                  <CheckCircle className="w-16 h-16 text-green-400 mx-auto mb-4" />
+                  <h3 className="text-xl font-bold text-white mb-2">
+                    {completionReason === 'correct' ? 'Richtig gelöst! 🎉' : 
+                     completionReason === 'solution' ? 'Lösung angezeigt' :
+                     completionReason === 'timeout' ? 'Zeit abgelaufen' :
+                     completionReason === 'max_attempts' ? 'Alle Versuche aufgebraucht' :
+                     'Frage abgeschlossen'}
+                  </h3>
+                  <p className="text-gray-300 mb-4">
+                    {completionReason === 'correct' ? 'Großartig! Du kannst zur nächsten Frage.' :
+                     'Du kannst zur nächsten Frage wechseln.'}
+                  </p>
+                </div>
+                
+                <button
+                  onClick={goToNextQuestion}
+                  className="w-full flex items-center justify-center px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-medium rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200"
+                >
+                  <Send className="w-5 h-5 mr-2" />
+                  Weiter zur nächsten Frage
+                </button>
               </div>
-              
-              <button
-                onClick={submitAnswer}
-                disabled={submitting || attempts >= 3 || timeLeft === 0 || !answer.trim()}
-                className="w-full flex items-center justify-center px-6 py-3 bg-gradient-to-r from-green-600 to-blue-600 text-white font-medium rounded-lg hover:from-green-700 hover:to-blue-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {submitting ? (
-                  <>
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                    Übermittle...
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-5 h-5 mr-2" />
-                    Antwort abgeben
-                  </>
-                )}
-              </button>
-            </div>
+            ) : (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Deine Antwort
+                  </label>
+                  <input
+                    type="text"
+                    value={answer}
+                    onChange={(e) => setAnswer(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && submitAnswer()}
+                    disabled={submitting || attempts >= 3 || timeLeft === 0}
+                    className="w-full px-4 py-3 bg-white/20 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                    placeholder="Gib deine Antwort ein..."
+                  />
+                </div>
+                
+                <button
+                  onClick={submitAnswer}
+                  disabled={submitting || attempts >= 3 || timeLeft === 0 || !answer.trim()}
+                  className="w-full flex items-center justify-center px-6 py-3 bg-gradient-to-r from-green-600 to-blue-600 text-white font-medium rounded-lg hover:from-green-700 hover:to-blue-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {submitting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                      Übermittle...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-5 h-5 mr-2" />
+                      Antwort abgeben
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         )}
-
-        {/* Scoreboard Link */}
-        <div className="text-center">
-          <button
-            onClick={() => navigate(`/scoreboard/${team?.event_id}`)}
-            className="px-6 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-all duration-200"
-          >
-            Scoreboard anzeigen
-          </button>
-        </div>
       </div>
     </div>
   );
