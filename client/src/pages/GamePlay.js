@@ -55,7 +55,89 @@ const GamePlay = () => {
         toast.success('Alle Rätsel gelöst! 🎉');
       } else {
         setCurrentQuestion(questionResponse.data);
-        setTimeLeft(questionResponse.data.time_limit_seconds);
+        
+        if (questionResponse.data.progress) {
+          // Question already has progress - restore state
+          const progress = questionResponse.data.progress;
+          setAttempts(progress.attemptsUsed);
+          setUsedTips(progress.usedTip);
+          
+          // Calculate remaining time based on when the question was started
+          const timeStarted = new Date(progress.timeStarted);
+          const now = new Date();
+          const elapsedSeconds = Math.floor((now - timeStarted) / 1000);
+          const remainingTime = Math.max(0, questionResponse.data.time_limit_seconds - elapsedSeconds);
+          
+          console.log('🕐 Time calculation:', {
+            timeStarted: timeStarted.toISOString(),
+            now: now.toISOString(),
+            elapsedSeconds,
+            timeLimit: questionResponse.data.time_limit_seconds,
+            remainingTime
+          });
+          
+          setTimeLeft(remainingTime);
+          
+          // Load already used tips
+          if (progress.usedTip > 0) {
+            try {
+              const tipsResponse = await axios.get(`/api/game/question/${questionResponse.data.id}/tips/${teamId}`);
+              setTips(tipsResponse.data.tips);
+            } catch (error) {
+              console.error('Error loading tips:', error);
+            }
+          } else {
+            setTips([]);
+          }
+          
+          if (remainingTime === 0) {
+            toast.error('Zeit für diese Frage ist bereits abgelaufen!');
+          } else if (progress.attemptsUsed > 0 || progress.usedTip > 0) {
+            // Only show restore message if there was actual progress
+            toast('Frage wurde wiederhergestellt', {
+              icon: '🔄',
+              duration: 3000
+            });
+          }
+        } else {
+          // Fresh question - start it now
+          try {
+            const startResponse = await axios.post(`/api/game/question/${questionResponse.data.id}/start`, {
+              teamId
+            });
+            
+            // Set initial state
+            setTimeLeft(questionResponse.data.time_limit_seconds);
+            setAttempts(0);
+            setUsedTips(0);
+            setTips([]);
+            
+                         if (startResponse.data.existing) {
+               // Question was already started - need to calculate remaining time
+               const timeStarted = new Date(startResponse.data.timeStarted);
+               const now = new Date();
+               const elapsedSeconds = Math.floor((now - timeStarted) / 1000);
+               const remainingTime = Math.max(0, questionResponse.data.time_limit_seconds - elapsedSeconds);
+               
+               console.log('🕐 Time calculation (existing):', {
+                 timeStarted: timeStarted.toISOString(),
+                 now: now.toISOString(),
+                 elapsedSeconds,
+                 timeLimit: questionResponse.data.time_limit_seconds,
+                 remainingTime
+               });
+               
+               setTimeLeft(remainingTime);
+               
+               if (remainingTime === 0) {
+                 toast.error('Zeit für diese Frage ist bereits abgelaufen!');
+               }
+             }
+          } catch (error) {
+            console.error('Error starting question:', error);
+            toast.error('Fehler beim Starten der Frage');
+          }
+        }
       }
     } catch (error) {
       console.error('Error loading game data:', error);
@@ -81,7 +163,10 @@ const GamePlay = () => {
       if (tipNumber === 3) {
         toast.warning('Achtung: Das ist die Lösung! (0 Punkte)');
       } else {
-        toast.info(`Tipp ${tipNumber} erhalten (Punkte-Abzug)`);
+        toast(`Tipp ${tipNumber} erhalten (Punkte-Abzug)`, {
+          icon: '💡',
+          duration: 3000
+        });
       }
     } catch (error) {
       console.error('Error getting tip:', error);
@@ -118,17 +203,20 @@ const GamePlay = () => {
         
         // Load next question after a short delay
         setTimeout(() => {
-          loadTeamAndQuestion();
           setAnswer('');
           setAttempts(0);
           setUsedTips(0);
           setTips([]);
+          loadTeamAndQuestion();
         }, 2000);
       } else {
         setAttempts(prev => prev + 1);
         toast.error(response.data.message);
         if (response.data.attemptsRemaining > 0) {
-          toast.info(`Noch ${response.data.attemptsRemaining} Versuche übrig`);
+          toast(`Noch ${response.data.attemptsRemaining} Versuche übrig`, {
+            icon: 'ℹ️',
+            duration: 3000
+          });
         }
         setAnswer('');
       }

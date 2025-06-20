@@ -573,15 +573,26 @@ router.put('/:id/logo', async (req, res) => {
 // Get team progress
 router.get('/:id/progress', async (req, res) => {
   try {
+    // First get the team to find the event
+    const team = await knex('teams').where({ id: req.params.id }).first();
+    if (!team) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+
     const progress = await knex('team_progress')
       .join('questions', 'team_progress.question_id', 'questions.id')
-      .where({ team_id: req.params.id })
+      .join('event_questions', 'questions.id', 'event_questions.question_id')
+      .where({ 
+        team_id: req.params.id,
+        'event_questions.event_id': team.event_id 
+      })
       .select(
         'team_progress.*',
         'questions.title as question_title',
-        'questions.difficulty'
+        'questions.difficulty',
+        'event_questions.order_index'
       )
-      .orderBy('questions.order_index');
+      .orderBy('event_questions.order_index');
 
     res.json(progress);
   } catch (error) {

@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import ConfirmationModal from '../components/ConfirmationModal';
 import QRCode from 'qrcode';
 import { QrCode, Download, X } from 'lucide-react';
+import { formatDateTimeDisplay } from '../utils/dateUtils';
 
 const AdminDashboard = () => {
   const { user, logout } = useAuth();
@@ -225,8 +226,7 @@ const AdminDashboard = () => {
                     <div>
                       <h3 className="text-white font-medium">{event.name}</h3>
                       <p className="text-gray-400 text-sm">
-                        {new Date(event.start_time).toLocaleDateString('de-DE')} - 
-                        {new Date(event.end_time).toLocaleDateString('de-DE')}
+                        {formatDateTimeDisplay(event.start_time)}
                       </p>
                       <p className="text-gray-400 text-sm">
                          Status: <span className={event.team_registration_open ? 'text-green-400' : 'text-red-400'}>

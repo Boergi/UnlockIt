@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Calendar, Users, Lock, Palette, Upload, Wand2 } from 'lucide-react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import { formatDateTimeLocal, convertLocalToUTC } from '../utils/dateUtils';
 
 const EventModal = ({ isOpen, onClose, event = null, onSave }) => {
   const [formData, setFormData] = useState({
@@ -25,8 +26,8 @@ const EventModal = ({ isOpen, onClose, event = null, onSave }) => {
         // Editing existing event
         setFormData({
           name: event.name || '',
-          start_time: event.start_time ? new Date(event.start_time).toISOString().slice(0, 16) : '',
-          end_time: event.end_time ? new Date(event.end_time).toISOString().slice(0, 16) : '',
+          start_time: formatDateTimeLocal(event.start_time),
+          end_time: formatDateTimeLocal(event.end_time),
           use_random_order: event.use_random_order || false,
           team_registration_open: event.team_registration_open !== false,
           access_code: event.access_code || '',
@@ -84,15 +85,22 @@ const EventModal = ({ isOpen, onClose, event = null, onSave }) => {
     const loadingToast = toast.loading(loadingMessage);
 
     try {
+      // Convert local datetime to UTC for API
+      const apiData = {
+        ...formData,
+        start_time: convertLocalToUTC(formData.start_time),
+        end_time: formData.end_time ? convertLocalToUTC(formData.end_time) : null
+      };
+
       let response;
       if (event) {
-        response = await axios.put(`/api/events/${event.id}`, formData);
+        response = await axios.put(`/api/events/${event.id}`, apiData);
         const successMessage = formData.generate_ai_logo 
           ? 'Event erfolgreich aktualisiert und Logo generiert!' 
           : 'Event erfolgreich aktualisiert!';
         toast.success(successMessage, { id: loadingToast });
       } else {
-        response = await axios.post('/api/events', formData);
+        response = await axios.post('/api/events', apiData);
         const successMessage = formData.generate_ai_logo 
           ? 'Event erfolgreich erstellt und Logo generiert!' 
           : 'Event erfolgreich erstellt!';

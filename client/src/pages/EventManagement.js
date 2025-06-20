@@ -7,6 +7,7 @@ import { Plus, Edit, Trash2, Calendar, Users, HelpCircle, Eye, Settings, X, User
 import ConfirmationModal from '../components/ConfirmationModal';
 import EventModal from '../components/EventModal';
 import { useSocket } from '../contexts/SocketContext';
+import { formatDateTimeDisplay } from '../utils/dateUtils';
 
 const EventManagement = () => {
   const location = useLocation();
@@ -495,7 +496,7 @@ const EventManagement = () => {
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-400">
                           <div className="flex items-center">
                             <Calendar className="w-4 h-4 mr-1" />
-                            <span>Start: {new Date(event.start_time).toLocaleString('de-DE')}</span>
+                            <span>Start: {formatDateTimeDisplay(event.start_time)}</span>
                           </div>
                           <div className="flex items-center">
                             <Users className="w-4 h-4 mr-1" />

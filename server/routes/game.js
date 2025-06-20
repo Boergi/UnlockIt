@@ -22,30 +22,181 @@ router.get('/team/:teamId/current-question', async (req, res) => {
 
     // Get all questions for the event
     let questions = await knex('questions')
-      .where({ event_id: team.event_id })
-      .orderBy(event.use_random_order ? knex.raw('RAND()') : 'order_index');
+      .join('event_questions', 'questions.id', 'event_questions.question_id')
+      .where('event_questions.event_id', team.event_id)
+      .select('questions.*', 'event_questions.order_index')
+      .orderBy(event.use_random_order ? knex.raw('RAND()') : 'event_questions.order_index');
 
     if (questions.length === 0) {
       return res.status(404).json({ error: 'No questions found for this event' });
     }
 
-    // Get team's progress
-    const progress = await knex('team_progress')
-      .where({ team_id: req.params.teamId })
-      .pluck('question_id');
+    // Get team's progress including incomplete questions
+    const allProgress = await knex('team_progress')
+      .where({ team_id: req.params.teamId });
+
+    const completedQuestionIds = allProgress
+      .filter(p => p.correct)
+      .map(p => p.question_id);
+
+    // Check if there's an incomplete question (started but not answered correctly)
+    const incompleteProgress = allProgress.find(p => !p.correct);
+    
+    if (incompleteProgress) {
+      // Return the incomplete question with progress
+      const incompleteQuestion = questions.find(q => q.id === incompleteProgress.question_id);
+      if (incompleteQuestion) {
+        const { solution, ...questionData } = incompleteQuestion;
+        const attemptsUsed = [incompleteProgress.attempt_1, incompleteProgress.attempt_2, incompleteProgress.attempt_3]
+          .filter(Boolean).length;
+        
+        return res.json({
+          ...questionData,
+          progress: {
+            attemptsUsed,
+            usedTip: incompleteProgress.used_tip || 0,
+            timeStarted: incompleteProgress.time_started
+          }
+        });
+      }
+    }
 
     // Find next unanswered question
-    const nextQuestion = questions.find(q => !progress.includes(q.id));
+    const nextQuestion = questions.find(q => !completedQuestionIds.includes(q.id));
     
     if (!nextQuestion) {
       return res.json({ completed: true, message: 'All questions completed!' });
     }
 
+    // Check if there's already a progress entry for this question
+    let existingProgress = allProgress.find(p => p.question_id === nextQuestion.id);
+    
     // Remove solution from response for security
     const { solution, ...questionData } = nextQuestion;
-    res.json(questionData);
+    
+    if (existingProgress) {
+      // Return existing progress
+      const attemptsUsed = [existingProgress.attempt_1, existingProgress.attempt_2, existingProgress.attempt_3]
+        .filter(Boolean).length;
+      
+      res.json({
+        ...questionData,
+        progress: {
+          attemptsUsed,
+          usedTip: existingProgress.used_tip || 0,
+          timeStarted: existingProgress.time_started
+        }
+      });
+    } else {
+      // Fresh question - no progress yet
+      res.json(questionData);
+    }
   } catch (error) {
     console.error('Get current question error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Start a question (create progress entry with start time)
+router.post('/question/:questionId/start', async (req, res) => {
+  try {
+    const { teamId } = req.body;
+
+    if (!teamId) {
+      return res.status(400).json({ error: 'Team ID is required' });
+    }
+
+    const question = await knex('questions').where({ id: req.params.questionId }).first();
+    if (!question) {
+      return res.status(404).json({ error: 'Question not found' });
+    }
+
+    console.log(`🔍 Checking progress for team ${teamId}, question ${req.params.questionId}`);
+
+    // Check if progress already exists
+    let progress = await knex('team_progress')
+      .where({ team_id: teamId, question_id: req.params.questionId })
+      .first();
+
+    console.log('📊 Existing progress:', progress);
+
+    if (!progress) {
+      console.log('➕ Creating new progress entry...');
+      try {
+        const [progressId] = await knex('team_progress').insert({
+          team_id: teamId,
+          question_id: req.params.questionId,
+          time_started: new Date()
+        });
+        progress = await knex('team_progress').where({ id: progressId }).first();
+        
+        console.log('✅ New progress created:', progress);
+        
+        res.json({ 
+          started: true, 
+          timeStarted: progress.time_started,
+          message: 'Question started successfully' 
+        });
+      } catch (insertError) {
+        console.log('❌ Insert failed, checking if entry was created by another request...');
+        // Maybe another request created it in the meantime
+        progress = await knex('team_progress')
+          .where({ team_id: teamId, question_id: req.params.questionId })
+          .first();
+        
+        if (progress) {
+          console.log('🔄 Found existing progress after failed insert:', progress);
+          res.json({ 
+            started: true, 
+            timeStarted: progress.time_started,
+            message: 'Question was already started (race condition)',
+            existing: true
+          });
+        } else {
+          throw insertError; // Re-throw if it's a different error
+        }
+      }
+    } else {
+      console.log('🔄 Progress already exists, returning existing data');
+      // Progress already exists - return existing start time
+      res.json({ 
+        started: true, 
+        timeStarted: progress.time_started,
+        message: 'Question was already started',
+        existing: true
+      });
+    }
+  } catch (error) {
+    console.error('Start question error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get already used tips for a question
+router.get('/question/:questionId/tips/:teamId', async (req, res) => {
+  try {
+    const { questionId, teamId } = req.params;
+
+    const question = await knex('questions').where({ id: questionId }).first();
+    if (!question) {
+      return res.status(404).json({ error: 'Question not found' });
+    }
+
+    const progress = await knex('team_progress')
+      .where({ team_id: teamId, question_id: questionId })
+      .first();
+
+    const tips = [];
+    if (progress && progress.used_tip) {
+      for (let i = 1; i <= progress.used_tip; i++) {
+        const tipField = `tip_${i}`;
+        tips.push(question[tipField]);
+      }
+    }
+
+    res.json({ tips, usedTip: progress?.used_tip || 0 });
+  } catch (error) {
+    console.error('Get tips error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -70,12 +221,12 @@ router.post('/question/:questionId/tip', async (req, res) => {
       .first();
 
     if (!progress) {
-      // Create progress record
+      // Create progress record if it doesn't exist
       const [progressId] = await knex('team_progress').insert({
         team_id: teamId,
         question_id: req.params.questionId,
         used_tip: tipNumber,
-        time_started: knex.fn.now()
+        time_started: new Date()
       });
       progress = await knex('team_progress').where({ id: progressId }).first();
     } else if (progress.used_tip >= tipNumber) {
@@ -116,12 +267,12 @@ router.post('/question/:questionId/answer', async (req, res) => {
       .first();
 
     if (!progress) {
-      // Create progress record
+      // Create progress record with first attempt
       const [progressId] = await knex('team_progress').insert({
         team_id: teamId,
         question_id: req.params.questionId,
         attempt_1: answer,
-        time_started: knex.fn.now()
+        time_started: new Date()
       });
       progress = await knex('team_progress').where({ id: progressId }).first();
     } else if (progress.correct) {
@@ -228,7 +379,11 @@ router.get('/event/:eventId/export', authenticateToken, async (req, res) => {
     const results = await knex('teams')
       .leftJoin('team_progress', 'teams.id', 'team_progress.team_id')
       .leftJoin('questions', 'team_progress.question_id', 'questions.id')
-      .where({ 'teams.event_id': req.params.eventId })
+      .leftJoin('event_questions', 'questions.id', 'event_questions.question_id')
+      .where({ 
+        'teams.event_id': req.params.eventId,
+        'event_questions.event_id': req.params.eventId
+      })
       .select(
         'teams.name as team_name',
         'questions.title as question_title',
@@ -240,10 +395,11 @@ router.get('/event/:eventId/export', authenticateToken, async (req, res) => {
         'team_progress.correct',
         'team_progress.points_awarded',
         'team_progress.time_started',
-        'team_progress.time_answered'
+        'team_progress.time_answered',
+        'event_questions.order_index'
       )
       .orderBy('teams.name')
-      .orderBy('questions.order_index');
+      .orderBy('event_questions.order_index');
 
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Game Results');

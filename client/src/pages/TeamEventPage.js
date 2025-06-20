@@ -56,6 +56,20 @@ const TeamEventPage = () => {
     }
   }, [isEventStarted, isEventEnded]);
 
+  // Set current question when questions are loaded but no progress exists
+  useEffect(() => {
+    if (questions.length > 0 && teamProgress.length === 0 && isEventStarted) {
+      // If no progress exists, set first question as current
+      setCurrentQuestion({
+        id: questions[0].id,
+        question_title: questions[0].title,
+        difficulty: questions[0].difficulty,
+        attempts: 0,
+        completed: false
+      });
+    }
+  }, [questions, teamProgress, isEventStarted]);
+
   // Socket.IO listeners for real-time updates
   useEffect(() => {
     if (!socket) return;
@@ -352,22 +366,22 @@ const TeamEventPage = () => {
               <h2 className="text-lg font-semibold text-white">Team Fortschritt</h2>
             </div>
 
-            {teamProgress.length > 0 ? (
+            {questions.length > 0 ? (
               <div className="space-y-2">
                 <div className="flex justify-between text-sm text-gray-300">
                   <span>Gelöste Fragen:</span>
-                  <span>{teamProgress.filter(q => q.completed).length} / {teamProgress.length}</span>
+                  <span>{teamProgress.filter(q => q.correct).length} / {questions.length}</span>
                 </div>
                 <div className="w-full bg-gray-700 rounded-full h-2">
                   <div 
                     className="bg-green-600 h-2 rounded-full transition-all duration-500"
                     style={{ 
-                      width: `${(teamProgress.filter(q => q.completed).length / teamProgress.length) * 100}%` 
+                      width: `${questions.length > 0 ? (teamProgress.filter(q => q.correct).length / questions.length) * 100 : 0}%` 
                     }}
                   ></div>
                 </div>
                 <div className="text-sm text-gray-300">
-                  Gesamtpunkte: {teamProgress.reduce((sum, q) => sum + (q.points_earned || 0), 0)}
+                  Gesamtpunkte: {teamProgress.reduce((sum, q) => sum + (q.points_awarded || 0), 0)}
                 </div>
               </div>
             ) : (
@@ -442,42 +456,50 @@ const TeamEventPage = () => {
             <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-gray-600">
               <h2 className="text-xl font-bold text-white mb-4">Fragen Übersicht</h2>
               
-              {teamProgress.length > 0 ? (
+              {questions.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {teamProgress.map((question, index) => (
-                    <div
-                      key={question.id}
-                      className={`p-4 rounded-lg border ${
-                        question.completed
-                          ? 'bg-green-500/20 border-green-500/30'
-                          : question.attempts > 0
-                          ? 'bg-yellow-500/20 border-yellow-500/30'
-                          : 'bg-white/5 border-gray-600'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="font-semibold text-white">
-                          {index + 1}. {question.question_title}
-                        </h3>
-                        {question.completed ? (
-                          <CheckCircle className="w-5 h-5 text-green-400" />
-                        ) : question.attempts > 0 ? (
-                          <AlertCircle className="w-5 h-5 text-yellow-400" />
-                        ) : (
-                          <div className="w-5 h-5 rounded-full border-2 border-gray-400"></div>
-                        )}
+                  {questions.map((question, index) => {
+                    // Find progress for this question
+                    const progress = teamProgress.find(p => p.question_id === question.id);
+                    const completed = progress?.correct || false;
+                    const attempts = progress ? [progress.attempt_1, progress.attempt_2, progress.attempt_3].filter(Boolean).length : 0;
+                    const pointsEarned = progress?.points_awarded || 0;
+                    
+                    return (
+                      <div
+                        key={question.id}
+                        className={`p-4 rounded-lg border ${
+                          completed
+                            ? 'bg-green-500/20 border-green-500/30'
+                            : attempts > 0
+                            ? 'bg-yellow-500/20 border-yellow-500/30'
+                            : 'bg-white/5 border-gray-600'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="font-semibold text-white">
+                            {index + 1}. {question.title}
+                          </h3>
+                          {completed ? (
+                            <CheckCircle className="w-5 h-5 text-green-400" />
+                          ) : attempts > 0 ? (
+                            <AlertCircle className="w-5 h-5 text-yellow-400" />
+                          ) : (
+                            <div className="w-5 h-5 rounded-full border-2 border-gray-400"></div>
+                          )}
+                        </div>
+                        <div className="flex justify-between text-sm text-gray-300">
+                          <span>Schwierigkeit: {question.difficulty}</span>
+                          <span>
+                            {completed 
+                              ? `${pointsEarned} Punkte` 
+                              : `Versuche: ${attempts}/3`
+                            }
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex justify-between text-sm text-gray-300">
-                        <span>Schwierigkeit: {question.difficulty}</span>
-                        <span>
-                          {question.completed 
-                            ? `${question.points_earned} Punkte` 
-                            : `Versuche: ${question.attempts || 0}/3`
-                          }
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="text-gray-300">Lade Fragen...</p>

@@ -4,6 +4,7 @@ const router = express.Router();
 const axios = require('axios');
 const fs = require('fs').promises;
 const path = require('path');
+const { formatDateForMySQL } = require('../utils/dateUtils');
 
 const knex = require('knex')(require('../knexfile')[process.env.NODE_ENV || 'development']);
 
@@ -164,7 +165,7 @@ router.post('/', authenticateToken, async (req, res) => {
 
     const [eventId] = await knex('events').insert({
       name,
-      start_time,
+      start_time: formatDateForMySQL(start_time),
       use_random_order: use_random_order || false,
       team_registration_open: team_registration_open !== false,
       access_code,
@@ -259,7 +260,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
       .where({ id: req.params.id })
       .update({
         name,
-        start_time,
+        start_time: formatDateForMySQL(start_time),
         use_random_order,
         team_registration_open,
         access_code,
