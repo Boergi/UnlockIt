@@ -4,6 +4,7 @@ import axios from 'axios';
 import toast from 'react-hot-toast';
 import { Plus, Edit, Trash2, Calendar, Users, HelpCircle, Eye, Settings, X, UserPlus } from 'lucide-react';
 import ConfirmationModal from '../components/ConfirmationModal';
+import EventModal from '../components/EventModal';
 import { useSocket } from '../contexts/SocketContext';
 
 const EventManagement = () => {
@@ -14,7 +15,7 @@ const EventManagement = () => {
   const [events, setEvents] = useState([]);
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [showEventModal, setShowEventModal] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
   const [showQuestionSelector, setShowQuestionSelector] = useState(null);
   const [selectedQuestions, setSelectedQuestions] = useState([]);
@@ -38,14 +39,7 @@ const EventManagement = () => {
     generate_ai_logo: false
   });
   
-  const [formData, setFormData] = useState({
-    name: '',
-    start_time: '',
-    end_time: '',
-    use_random_order: false,
-    team_registration_open: true,
-    access_code: ''
-  });
+
 
   useEffect(() => {
     fetchData();
@@ -53,7 +47,7 @@ const EventManagement = () => {
     
     // Handle URL-based actions
     if (location.pathname.includes('/new')) {
-      setShowCreateForm(true);
+      setShowEventModal(true);
     } else if (eventId) {
       // Load event for editing
       loadEventForEditing(eventId);
@@ -101,21 +95,13 @@ const EventManagement = () => {
     };
   }, [socket]);
 
-  const loadEventForEditing = async (id) => {
+    const loadEventForEditing = async (id) => {
     try {
       const response = await axios.get(`/api/events/${id}`);
       const event = response.data;
       
-      setFormData({
-        name: event.name,
-        start_time: event.start_time ? new Date(event.start_time).toISOString().slice(0, 16) : '',
-        end_time: event.end_time ? new Date(event.end_time).toISOString().slice(0, 16) : '',
-        use_random_order: event.use_random_order || false,
-        team_registration_open: event.team_registration_open !== false,
-        access_code: event.access_code || ''
-      });
       setEditingEvent(event);
-      setShowCreateForm(true);
+      setShowEventModal(true);
     } catch (error) {
       console.error('Error loading event for editing:', error);
       toast.error('Fehler beim Laden des Events');
@@ -147,70 +133,11 @@ const EventManagement = () => {
     }
   };
 
-  const resetForm = () => {
-    setFormData({
-      name: '',
-      start_time: '',
-      end_time: '',
-      use_random_order: false,
-      team_registration_open: true,
-      access_code: ''
-    });
-    setEditingEvent(null);
-    setShowCreateForm(false);
-    
-    // Navigate back to events list if we were editing an event via URL
-    if (eventId) {
-      navigate('/admin/events');
-    }
-  };
 
-  const handleInputChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setFormData({
-      ...formData,
-      [name]: type === 'checkbox' ? checked : value
-    });
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!formData.name || !formData.start_time) {
-      toast.error('Name und Startzeit sind erforderlich');
-      return;
-    }
-
-    const loadingToast = toast.loading(editingEvent ? 'Event wird aktualisiert...' : 'Event wird erstellt...');
-
-    try {
-      if (editingEvent) {
-        await axios.put(`/api/events/${editingEvent.id}`, formData);
-        toast.success('Event erfolgreich aktualisiert!', { id: loadingToast });
-      } else {
-        await axios.post('/api/events', formData);
-        toast.success('Event erfolgreich erstellt!', { id: loadingToast });
-      }
-
-      resetForm();
-      fetchData();
-    } catch (error) {
-      console.error('Error saving event:', error);
-      toast.error('Fehler beim Speichern des Events: ' + (error.response?.data?.error || error.message), { id: loadingToast });
-    }
-  };
 
   const handleEdit = (event) => {
-    setFormData({
-      name: event.name,
-      start_time: event.start_time ? new Date(event.start_time).toISOString().slice(0, 16) : '',
-      end_time: event.end_time ? new Date(event.end_time).toISOString().slice(0, 16) : '',
-      use_random_order: event.use_random_order || false,
-      team_registration_open: event.team_registration_open !== false,
-      access_code: event.access_code || ''
-    });
     setEditingEvent(event);
-    setShowCreateForm(true);
+    setShowEventModal(true);
   };
 
   const handleDeleteClick = (eventId) => {
@@ -468,7 +395,7 @@ const EventManagement = () => {
             </p>
           </div>
           <button
-            onClick={() => setShowCreateForm(true)}
+            onClick={() => setShowEventModal(true)}
             className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg transition-colors flex items-center"
           >
             <Plus className="w-5 h-5 mr-2" />
@@ -476,113 +403,21 @@ const EventManagement = () => {
           </button>
         </div>
 
-        {/* Create/Edit Form */}
-        {showCreateForm && (
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 mb-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-white">
-                {editingEvent ? 'Event bearbeiten' : 'Neues Event erstellen'}
-              </h2>
-              <button
-                onClick={resetForm}
-                className="text-gray-400 hover:text-white p-1"
-                title="Schließen"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-white font-medium mb-2">Event Name *</label>
-                  <input
-                    type="text"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleInputChange}
-                    className="w-full bg-white/20 text-white border border-white/30 rounded-lg px-4 py-2 placeholder-gray-400"
-                    placeholder="z.B. Escape Room Challenge 2024"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-white font-medium mb-2">Zugangs-Code</label>
-                  <input
-                    type="text"
-                    name="access_code"
-                    value={formData.access_code}
-                    onChange={handleInputChange}
-                    className="w-full bg-white/20 text-white border border-white/30 rounded-lg px-4 py-2 placeholder-gray-400"
-                    placeholder="Optional - für private Events"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-white font-medium mb-2">Startzeit *</label>
-                  <input
-                    type="datetime-local"
-                    name="start_time"
-                    value={formData.start_time}
-                    onChange={handleInputChange}
-                    className="w-full bg-white/20 text-white border border-white/30 rounded-lg px-4 py-2"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-white font-medium mb-2">Endzeit</label>
-                  <input
-                    type="datetime-local"
-                    name="end_time"
-                    value={formData.end_time}
-                    onChange={handleInputChange}
-                    className="w-full bg-white/20 text-white border border-white/30 rounded-lg px-4 py-2"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-6">
-                <label className="flex items-center text-white">
-                  <input
-                    type="checkbox"
-                    name="use_random_order"
-                    checked={formData.use_random_order}
-                    onChange={handleInputChange}
-                    className="mr-2"
-                  />
-                  Zufällige Fragenreihenfolge
-                </label>
-                <label className="flex items-center text-white">
-                  <input
-                    type="checkbox"
-                    name="team_registration_open"
-                    checked={formData.team_registration_open}
-                    onChange={handleInputChange}
-                    className="mr-2"
-                  />
-                  Team-Registrierung offen
-                </label>
-              </div>
-
-              <div className="flex space-x-4">
-                <button
-                  type="submit"
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors"
-                >
-                  {editingEvent ? 'Aktualisieren' : 'Erstellen'}
-                </button>
-                <button
-                  type="button"
-                  onClick={resetForm}
-                  className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded-lg transition-colors"
-                >
-                  Abbrechen
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
+        {/* Event Modal */}
+        <EventModal
+          isOpen={showEventModal}
+          onClose={() => {
+            setShowEventModal(false);
+            setEditingEvent(null);
+            if (eventId) {
+              navigate('/admin/events');
+            }
+          }}
+          event={editingEvent}
+          onSave={(savedEvent) => {
+            fetchData();
+          }}
+        />
 
         {/* Events List */}
         <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6">
@@ -594,7 +429,7 @@ const EventManagement = () => {
             <div className="text-center py-8">
               <p className="text-gray-400 mb-4">Noch keine Events erstellt.</p>
               <button
-                onClick={() => setShowCreateForm(true)}
+                onClick={() => setShowEventModal(true)}
                 className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg transition-colors"
               >
                 Erstes Event erstellen
@@ -605,29 +440,45 @@ const EventManagement = () => {
               {events.map((event) => (
                 <div key={event.id} className="bg-white/5 rounded-lg p-4">
                   <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <h3 className="text-white font-medium text-lg mb-2">{event.name}</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-400">
-                        <div className="flex items-center">
-                          <Calendar className="w-4 h-4 mr-1" />
-                          <span>Start: {new Date(event.start_time).toLocaleString('de-DE')}</span>
-                        </div>
-                        <div className="flex items-center">
-                          <Users className="w-4 h-4 mr-1" />
-                          <span className={event.team_registration_open ? 'text-green-400' : 'text-red-400'}>
-                            {event.team_registration_open ? 'Registrierung offen' : 'Registrierung geschlossen'}
-                          </span>
-                        </div>
-                        <div className="flex items-center">
-                          <HelpCircle className="w-4 h-4 mr-1" />
-                          <span>Fragen: {/* TODO: Show question count */}</span>
-                        </div>
-                      </div>
-                      {event.access_code && (
-                        <div className="mt-2 text-sm text-purple-400">
-                          🔒 Zugangs-Code: {event.access_code}
-                        </div>
+                    <div className="flex items-start space-x-4 flex-1">
+                      {event.logo_url && (
+                        <img
+                          src={event.logo_url}
+                          alt={`${event.name} Logo`}
+                          className="w-12 h-12 object-cover rounded-lg border border-white/20"
+                        />
                       )}
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-2">
+                          <h3 className="text-white font-medium text-lg">{event.name}</h3>
+                          {event.ai_logo_generated && (
+                            <span className="text-xs bg-purple-600 text-white px-2 py-1 rounded">
+                              AI Logo
+                            </span>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-400">
+                          <div className="flex items-center">
+                            <Calendar className="w-4 h-4 mr-1" />
+                            <span>Start: {new Date(event.start_time).toLocaleString('de-DE')}</span>
+                          </div>
+                          <div className="flex items-center">
+                            <Users className="w-4 h-4 mr-1" />
+                            <span className={event.team_registration_open ? 'text-green-400' : 'text-red-400'}>
+                              {event.team_registration_open ? 'Registrierung offen' : 'Registrierung geschlossen'}
+                            </span>
+                          </div>
+                          <div className="flex items-center">
+                            <HelpCircle className="w-4 h-4 mr-1" />
+                            <span>Fragen: {/* TODO: Show question count */}</span>
+                          </div>
+                        </div>
+                        {event.access_code && (
+                          <div className="mt-2 text-sm text-purple-400">
+                            🔒 Zugangs-Code: {event.access_code}
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <div className="flex flex-wrap gap-2 ml-4">
                       <button
@@ -1025,8 +876,7 @@ const EventManagement = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {[1, 2, 3].map((id) => {
                   const option = logoOptions.find(opt => opt.id === id);
-                  const isGenerating = generationProgress.progress < id;
-                  const isCurrentlyGenerating = generationProgress.progress === id - 1 && generationProgress.progress < generationProgress.total;
+                  const isStillGenerating = !option && generationProgress.progress < generationProgress.total;
                   
                   return (
                     <div key={id} className="bg-white/5 rounded-lg p-4 hover:bg-white/10 transition-colors">
@@ -1040,7 +890,7 @@ const EventManagement = () => {
                               e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtc2l6ZT0iMTgiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5FcnJvcjwvdGV4dD48L3N2Zz4=';
                             }}
                           />
-                        ) : isCurrentlyGenerating ? (
+                        ) : isStillGenerating ? (
                           <div className="w-full h-full flex flex-col items-center justify-center">
                             <div className="relative w-16 h-16 mb-4">
                               <div className="absolute inset-0 border-4 border-blue-200 rounded-full"></div>
@@ -1050,24 +900,19 @@ const EventManagement = () => {
                               </div>
                             </div>
                             <div className="text-center">
-                              <p className="text-white text-sm font-medium">Generiert...</p>
-                              <p className="text-gray-400 text-xs mt-1">{generationProgress.currentStyle}</p>
-                            </div>
-                          </div>
-                        ) : isGenerating ? (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <div className="text-center">
-                              <div className="w-12 h-12 border-2 border-gray-600 rounded-full mx-auto mb-2"></div>
-                              <p className="text-gray-500 text-sm">Warteschlange</p>
+                              <p className="text-white text-sm font-medium">Generiert parallel...</p>
+                              <p className="text-gray-400 text-xs mt-1">
+                                {['Modern & Professional', 'Dynamic & Bold', 'Minimalist & Clean'][id - 1]}
+                              </p>
                             </div>
                           </div>
                         ) : (
                           <div className="w-full h-full flex items-center justify-center">
                             <div className="text-center">
-                              <div className="w-12 h-12 bg-green-600 rounded-full flex items-center justify-center mx-auto mb-2">
-                                <span className="text-white text-xl">✓</span>
+                              <div className="w-12 h-12 bg-gray-600 rounded-full flex items-center justify-center mx-auto mb-2">
+                                <span className="text-gray-400 text-xl">⏳</span>
                               </div>
-                              <p className="text-green-400 text-sm">Fertig</p>
+                              <p className="text-gray-500 text-sm">Fehler oder Timeout</p>
                             </div>
                           </div>
                         )}

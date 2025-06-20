@@ -84,11 +84,11 @@ router.post('/generate-logo', authenticateToken, async (req, res) => {
 
     // Create 3 different prompt variations for variety
     const prompts = [
-      `Design a professional LOGO for the team "${teamName}" participating in "${eventName || 'a gaming event'}". This must be a LOGO design - not a scene or illustration. Create a clean, modern logo with geometric shapes, bold typography-style elements, and vibrant colors. The logo should work on both light and dark backgrounds. Make it simple enough to be recognizable at small sizes. LOGO DESIGN ONLY. No text, no words, no letters - just pure symbolic logo design. Think corporate logo style.`,
-      
-      `Create a dynamic TEAM LOGO for "${teamName}" in "${eventName || 'a gaming event'}". This is specifically a LOGO design project - create an emblem/badge style logo with sharp, angular geometric forms. Use strong, contrasting colors and bold shapes that convey strength and competition. The design must be a standalone LOGO symbol that could be printed on merchandise. No text, no scenes, no backgrounds - pure logo iconography only. Think sports team logo aesthetic.`,
-      
-      `Design a minimalist LOGO symbol for team "${teamName}" competing in "${eventName || 'a gaming event'}". This is a LOGO design task - create a clean, sophisticated logo mark using simple geometric forms and negative space. Use a refined color palette with maximum 3 colors. The logo should be instantly recognizable and work as a favicon or app icon. LOGO ONLY - no illustrations, no text, no decorative elements. Think tech company logo simplicity.`
+      `Design a modern, professional logo for the team "${teamName}", participating in "${eventName || 'a gaming event'}". This is a logo design only — no text, no letters, no numbers, no scenes. Use clean, balanced geometric shapes and vibrant, contrasting colors that look great on both light and dark backgrounds. The logo should be simple, scalable, and immediately recognizable at small sizes. Think tech company branding or app icon — focus on symmetry, clarity, and visual impact.`,
+    
+      `Create a powerful team logo for "${teamName}" in "${eventName || 'a gaming event'}". Design an angular, bold emblem or badge-style logo using sharp geometric forms and a dynamic color scheme (e.g., red, black, gold, electric blue). Avoid text, numbers, or letters — logo only. The design should convey energy, strength, and competitive spirit. Think professional e-sports or sports franchise identity — simple, striking, and printable on merch.`,
+    
+      `Design a minimalist, symbolic logo for team "${teamName}", competing in "${eventName || 'a gaming event'}". Use abstract geometric forms, subtle negative space, and a limited, refined color palette (max 3 colors). No text, letters, or decorative details — just a clean, elegant icon that scales well and works as a favicon, app logo, or tech brand mark. Focus on simplicity, clever shape composition, and brand-level clarity.`
     ];
 
     console.log('🎨 Generating 3 AI logo options for team:', teamName);
@@ -103,17 +103,15 @@ router.post('/generate-logo', authenticateToken, async (req, res) => {
       });
     }
 
-    const logoOptions = [];
-    
-    // Generate 3 different logos
-    for (let i = 0; i < 3; i++) {
+    // Generate all 3 logos in parallel for much faster processing
+    const logoGenerationPromises = prompts.map(async (prompt, i) => {
       try {
         // Send progress update
         if (socketId && io) {
           io.to(socketId).emit('logo-generation-status', {
             status: 'generating',
-            message: `Generiere Logo ${i + 1} von 3...`,
-            progress: i,
+            message: `Generiere alle 3 Logos parallel...`,
+            progress: 0,
             total: 3,
             currentStyle: ['Modern & Professional', 'Dynamic & Bold', 'Minimalist & Clean'][i]
           });
@@ -123,10 +121,11 @@ router.post('/generate-logo', authenticateToken, async (req, res) => {
           'https://api.openai.com/v1/images/generations',
           {
             model: 'dall-e-3',
-            prompt: prompts[i],
+            prompt: prompt,
             n: 1,
             size: '1024x1024',
-            quality: 'standard',
+            quality: 'hd',
+            style: 'vivid',
             response_format: 'url'
           },
           {
@@ -157,11 +156,9 @@ router.post('/generate-logo', authenticateToken, async (req, res) => {
           style: ['Modern & Professional', 'Dynamic & Bold', 'Minimalist & Clean'][i]
         };
 
-        logoOptions.push(logoOption);
-
         console.log(`✅ AI logo option ${i + 1} generated and saved:`, logoUrl);
 
-        // Send live update with new logo
+        // Send live update with new logo as soon as it's ready
         if (socketId && io) {
           io.to(socketId).emit('logo-generation-update', {
             logoOption: logoOption,
@@ -169,11 +166,8 @@ router.post('/generate-logo', authenticateToken, async (req, res) => {
             total: 3
           });
         }
-        
-        // Add small delay between requests to avoid rate limiting
-        if (i < 2) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
+
+        return logoOption;
       } catch (error) {
         console.error(`Error generating logo option ${i + 1}:`, error);
         
@@ -185,9 +179,19 @@ router.post('/generate-logo', authenticateToken, async (req, res) => {
             total: 3
           });
         }
-        // Continue with other logos even if one fails
+        
+        // Return null for failed generations
+        return null;
       }
-    }
+    });
+
+    // Wait for all logo generations to complete (or fail)
+    const logoResults = await Promise.allSettled(logoGenerationPromises);
+    
+    // Extract successful logo options
+    const logoOptions = logoResults
+      .filter(result => result.status === 'fulfilled' && result.value !== null)
+      .map(result => result.value);
 
     if (logoOptions.length === 0) {
       if (socketId && io) {

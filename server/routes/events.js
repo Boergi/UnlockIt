@@ -1,8 +1,35 @@
 const express = require('express');
 const { authenticateToken } = require('./auth');
 const router = express.Router();
+const axios = require('axios');
+const fs = require('fs').promises;
+const path = require('path');
 
 const knex = require('knex')(require('../knexfile')[process.env.NODE_ENV || 'development']);
+
+// OpenAI Configuration
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const OPENAI_ENABLED = process.env.OPENAI_ENABLED === 'true';
+
+// Ensure upload directories exist
+const uploadsDir = path.join(__dirname, '../uploads');
+const logosDir = path.join(uploadsDir, 'logos');
+
+const ensureDirectories = async () => {
+  try {
+    await fs.access(uploadsDir);
+  } catch {
+    await fs.mkdir(uploadsDir, { recursive: true });
+  }
+  
+  try {
+    await fs.access(logosDir);
+  } catch {
+    await fs.mkdir(logosDir, { recursive: true });
+  }
+};
+
+ensureDirectories();
 
 // Get all events
 router.get('/', authenticateToken, async (req, res) => {
@@ -42,6 +69,13 @@ router.get('/stats', authenticateToken, async (req, res) => {
   }
 });
 
+// Get AI configuration (must be before /:id route)
+router.get('/ai-config', (req, res) => {
+  res.json({
+    aiEnabled: OPENAI_ENABLED && !!OPENAI_API_KEY
+  });
+});
+
 // Get single event
 router.get('/:id', async (req, res) => {
   try {
@@ -63,10 +97,69 @@ router.get('/:id', async (req, res) => {
 // Create new event
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { name, start_time, use_random_order, team_registration_open, access_code } = req.body;
+    const { name, start_time, use_random_order, team_registration_open, access_code, logo_url, generate_ai_logo } = req.body;
 
     if (!name || !start_time) {
       return res.status(400).json({ error: 'Name and start time are required' });
+    }
+
+    let finalLogoUrl = logo_url || null;
+    let aiLogoGenerated = false;
+
+    // Generate AI logo if requested
+    if (generate_ai_logo && OPENAI_ENABLED && OPENAI_API_KEY) {
+      try {
+        const prompt = `Create a colorful, modern logo for a corporate event titled '${name}'. The logo should include the full event name '${name}' as clearly readable, centered text in bold geometric sans-serif font. Incorporate a circular emblem or badge design featuring dynamic, abstract business-themed elements like gears, arrows, bar charts, or rising curves. Use a vibrant and professional color palette (e.g. deep blue, coral red, orange, turquoise, gold). Ensure a well-balanced composition with good contrast and visual clarity. The overall style should be sleek, eye-catching, and suitable for event branding.`;
+
+        console.log('🎨 Generating AI logo for event:', name);
+
+        const response = await axios.post(
+          'https://api.openai.com/v1/images/generations',
+          {
+            model: 'dall-e-3',
+            prompt: prompt,
+            n: 1,
+            size: '1024x1024',
+            quality: 'hd',
+            style: 'vivid',
+            response_format: 'url'
+          },
+          {
+            headers: {
+              'Authorization': `Bearer ${OPENAI_API_KEY}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        const imageUrl = response.data.data[0].url;
+
+        // Download and save the image locally
+        const imageResponse = await axios.get(imageUrl, {
+          responseType: 'arraybuffer'
+        });
+
+        const fileName = `event_logo_${name.replace(/[^a-zA-Z0-9]/g, '_')}_v1.png`;
+        const filePath = path.join(logosDir, fileName);
+
+        await fs.writeFile(filePath, imageResponse.data);
+
+        finalLogoUrl = `/uploads/logos/${fileName}`;
+        aiLogoGenerated = true;
+
+        console.log('✅ AI logo generated and saved:', finalLogoUrl);
+      } catch (error) {
+        console.error('Error generating AI logo:', error);
+        // Continue with event creation without logo if AI generation fails
+        finalLogoUrl = null;
+        
+        // Handle specific API errors but don't fail the event creation
+        if (error.response?.status === 401) {
+          console.error('❌ OpenAI API key is invalid or expired');
+        } else if (error.response?.status === 429) {
+          console.error('❌ OpenAI API rate limit exceeded');
+        }
+      }
     }
 
     const [eventId] = await knex('events').insert({
@@ -74,7 +167,9 @@ router.post('/', authenticateToken, async (req, res) => {
       start_time,
       use_random_order: use_random_order || false,
       team_registration_open: team_registration_open !== false,
-      access_code
+      access_code,
+      logo_url: finalLogoUrl,
+      ai_logo_generated: aiLogoGenerated
     });
 
     const event = await knex('events').where({ id: eventId }).first();
@@ -88,7 +183,77 @@ router.post('/', authenticateToken, async (req, res) => {
 // Update event
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
-    const { name, start_time, use_random_order, team_registration_open, access_code } = req.body;
+    const { name, start_time, use_random_order, team_registration_open, access_code, logo_url, generate_ai_logo } = req.body;
+    
+    const event = await knex('events').where({ id: req.params.id }).first();
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    let finalLogoUrl = logo_url;
+    let aiLogoGenerated = event.ai_logo_generated;
+
+    // Generate AI logo if requested
+    if (generate_ai_logo && OPENAI_ENABLED && OPENAI_API_KEY) {
+      try {
+        const prompt = `Create a colorful, modern logo for a corporate event titled '${name || event.name}'. The logo should include the full event name '${name || event.name}' as clearly readable, centered text in bold geometric sans-serif font. Incorporate a circular emblem or badge design featuring dynamic, abstract business-themed elements like gears, arrows, bar charts, or rising curves. Use a vibrant and professional color palette (e.g. deep blue, coral red, orange, turquoise, gold). Ensure a well-balanced composition with good contrast and visual clarity. The overall style should be sleek, eye-catching, and suitable for event branding.`;
+
+        console.log('🎨 Generating AI logo for event:', name || event.name);
+
+        const response = await axios.post(
+          'https://api.openai.com/v1/images/generations',
+          {
+            model: 'dall-e-3',
+            prompt: prompt,
+            n: 1,
+            size: '1024x1024',
+            quality: 'hd',
+            style: 'vivid',
+            response_format: 'url'
+          },
+          {
+            headers: {
+              'Authorization': `Bearer ${OPENAI_API_KEY}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        const imageUrl = response.data.data[0].url;
+
+        // Download and save the image locally
+        const imageResponse = await axios.get(imageUrl, {
+          responseType: 'arraybuffer'
+        });
+
+        const fileName = `event_logo_${(name || event.name).replace(/[^a-zA-Z0-9]/g, '_')}_v1.png`;
+        const filePath = path.join(logosDir, fileName);
+
+        await fs.writeFile(filePath, imageResponse.data);
+
+        finalLogoUrl = `/uploads/logos/${fileName}`;
+        aiLogoGenerated = true;
+
+        console.log('✅ AI logo generated and saved:', finalLogoUrl);
+      } catch (error) {
+        console.error('Error generating AI logo:', error);
+        // Continue with event update without logo change if AI generation fails
+        finalLogoUrl = event.logo_url;
+        
+        // Handle specific API errors
+        if (error.response?.status === 401) {
+          console.error('❌ OpenAI API key is invalid or expired');
+          return res.status(400).json({ 
+            error: 'AI-Logo-Generierung fehlgeschlagen: Ungültiger API-Schlüssel. Bitte wenden Sie sich an den Administrator.' 
+          });
+        } else if (error.response?.status === 429) {
+          console.error('❌ OpenAI API rate limit exceeded');
+          return res.status(400).json({ 
+            error: 'AI-Logo-Generierung fehlgeschlagen: API-Limit erreicht. Bitte versuchen Sie es später erneut.' 
+          });
+        }
+      }
+    }
     
     await knex('events')
       .where({ id: req.params.id })
@@ -98,11 +263,13 @@ router.put('/:id', authenticateToken, async (req, res) => {
         use_random_order,
         team_registration_open,
         access_code,
+        logo_url: finalLogoUrl,
+        ai_logo_generated: aiLogoGenerated,
         updated_at: knex.fn.now()
       });
 
-    const event = await knex('events').where({ id: req.params.id }).first();
-    res.json(event);
+    const updatedEvent = await knex('events').where({ id: req.params.id }).first();
+    res.json(updatedEvent);
   } catch (error) {
     console.error('Update event error:', error);
     res.status(500).json({ error: 'Internal server error' });
