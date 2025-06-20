@@ -317,8 +317,24 @@ router.get('/:id/stats', authenticateToken, async (req, res) => {
   }
 });
 
-// Get questions assigned to event
-router.get('/:id/questions', authenticateToken, async (req, res) => {
+// Get questions assigned to event (public for teams)
+router.get('/:id/questions', async (req, res) => {
+  try {
+    const questions = await knex('questions')
+      .join('event_questions', 'questions.id', 'event_questions.question_id')
+      .where('event_questions.event_id', req.params.id)
+      .select('questions.*', 'event_questions.order_index', 'event_questions.id as assignment_id')
+      .orderBy('event_questions.order_index');
+    
+    res.json(questions);
+  } catch (error) {
+    console.error('Get event questions error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get questions assigned to event (admin only)
+router.get('/:id/questions/admin', authenticateToken, async (req, res) => {
   try {
     const questions = await knex('questions')
       .join('event_questions', 'questions.id', 'event_questions.question_id')

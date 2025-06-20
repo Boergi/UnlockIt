@@ -67,7 +67,7 @@ const deleteTeamLogoFiles = async (team, event) => {
 };
 
 // Generate AI logo options with live updates
-router.post('/generate-logo', authenticateToken, async (req, res) => {
+router.post('/generate-logo', async (req, res) => {
   try {
     const { teamName, eventName, socketId } = req.body;
 
@@ -533,6 +533,39 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     res.json({ message: 'Team and associated logos deleted successfully' });
   } catch (error) {
     console.error('Delete team error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Set team logo (for logo selection after generation)
+router.put('/:id/logo', async (req, res) => {
+  try {
+    const { logoUrl } = req.body;
+    
+    if (!logoUrl) {
+      return res.status(400).json({ error: 'Logo URL is required' });
+    }
+
+    const team = await knex('teams').where({ id: req.params.id }).first();
+    if (!team) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+
+    // Update team with selected logo
+    await knex('teams')
+      .where({ id: req.params.id })
+      .update({
+        logo_url: logoUrl,
+        ai_logo_generated: true,
+        updated_at: knex.fn.now()
+      });
+
+    const updatedTeam = await knex('teams').where({ id: req.params.id }).first();
+    
+    console.log(`✅ Logo selected for team "${team.name}": ${logoUrl}`);
+    res.json(updatedTeam);
+  } catch (error) {
+    console.error('Set team logo error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

@@ -6,6 +6,8 @@ import { AuthProvider } from './contexts/AuthContext';
 
 // Components
 import HomePage from './pages/HomePage';
+import EventPage from './pages/EventPage';
+import TeamEventPage from './pages/TeamEventPage';
 import TeamRegistration from './pages/TeamRegistration';
 import GamePlay from './pages/GamePlay';
 import Scoreboard from './pages/Scoreboard';
@@ -25,6 +27,8 @@ function App() {
             <Routes>
               {/* Public Routes */}
               <Route path="/" element={<HomePage />} />
+              <Route path="/events/:eventId" element={<EventPage />} />
+              <Route path="/team/:teamId/event/:eventId" element={<TeamEventPage />} />
               <Route path="/join/:eventId" element={<TeamRegistration />} />
               <Route path="/play/:teamId" element={<GamePlay />} />
               <Route path="/scoreboard/:eventId" element={<Scoreboard />} />
@@ -85,4 +89,4 @@ function App() {
   );
 }
 
-export default App; 
+export default App;

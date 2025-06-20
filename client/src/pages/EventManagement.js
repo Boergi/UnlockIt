@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import toast from 'react-hot-toast';
-import { Plus, Edit, Trash2, Calendar, Users, HelpCircle, Eye, Settings, X, UserPlus } from 'lucide-react';
+import QRCode from 'qrcode';
+import { Plus, Edit, Trash2, Calendar, Users, HelpCircle, Eye, Settings, X, UserPlus, QrCode, Copy, Share2 } from 'lucide-react';
 import ConfirmationModal from '../components/ConfirmationModal';
 import EventModal from '../components/EventModal';
 import { useSocket } from '../contexts/SocketContext';
@@ -38,6 +39,9 @@ const EventManagement = () => {
     logo_url: '',
     generate_ai_logo: false
   });
+  const [showQrCodeModal, setShowQrCodeModal] = useState(false);
+  const [selectedTeamForQr, setSelectedTeamForQr] = useState(null);
+  const [qrCodeUrl, setQrCodeUrl] = useState('');
   
 
 
@@ -372,6 +376,37 @@ const EventManagement = () => {
     }
   };
 
+  const generateTeamQrCode = async (team, event) => {
+    try {
+      const teamPageUrl = `${window.location.origin}/team/${team.id}/event/${event.id}`;
+      const qrCodeDataUrl = await QRCode.toDataURL(teamPageUrl, {
+        width: 256,
+        margin: 2,
+        color: {
+          dark: '#1f2937',
+          light: '#ffffff'
+        }
+      });
+      setQrCodeUrl(qrCodeDataUrl);
+      setSelectedTeamForQr({ ...team, event });
+      setShowQrCodeModal(true);
+    } catch (error) {
+      console.error('Error generating QR code:', error);
+      toast.error('Fehler beim Generieren des QR-Codes');
+    }
+  };
+
+  const copyTeamUrl = async (team, event) => {
+    const teamPageUrl = `${window.location.origin}/team/${team.id}/event/${event.id}`;
+    try {
+      await navigator.clipboard.writeText(teamPageUrl);
+      toast.success('Team-Link kopiert!');
+    } catch (error) {
+      console.error('Error copying URL:', error);
+      toast.error('Fehler beim Kopieren');
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -695,6 +730,20 @@ const EventManagement = () => {
                            </div>
                            <div className="flex space-x-1">
                              <button
+                               onClick={() => generateTeamQrCode(team, showTeamManager)}
+                               className="text-green-400 hover:text-green-300 p-1"
+                               title="QR-Code generieren"
+                             >
+                               <QrCode className="w-4 h-4" />
+                             </button>
+                             <button
+                               onClick={() => copyTeamUrl(team, showTeamManager)}
+                               className="text-purple-400 hover:text-purple-300 p-1"
+                               title="Link kopieren"
+                             >
+                               <Copy className="w-4 h-4" />
+                             </button>
+                             <button
                                onClick={() => handleTeamEdit(team)}
                                className="text-blue-400 hover:text-blue-300 p-1"
                                title="Team bearbeiten"
@@ -989,6 +1038,65 @@ const EventManagement = () => {
           cancelText="Abbrechen"
           variant="danger"
         />
+
+        {/* QR Code Modal */}
+        {showQrCodeModal && selectedTeamForQr && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-gray-900 rounded-lg p-6 w-full max-w-md">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-bold text-white">Team QR-Code</h3>
+                <button
+                  onClick={() => setShowQrCodeModal(false)}
+                  className="text-gray-400 hover:text-white p-1"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+              
+              <div className="text-center">
+                <div className="bg-white rounded-lg p-4 mb-4 inline-block">
+                  {qrCodeUrl && (
+                    <img
+                      src={qrCodeUrl}
+                      alt="Team QR Code"
+                      className="w-64 h-64"
+                    />
+                  )}
+                </div>
+                
+                <div className="space-y-3">
+                  <p className="text-gray-300 text-sm">
+                    QR-Code für Team-Seite
+                  </p>
+                  
+                  <div className="bg-white/10 rounded-lg p-3">
+                    <p className="text-white font-medium mb-1">Team: {selectedTeamForQr.name}</p>
+                    <p className="text-gray-300 text-sm">Event: {selectedTeamForQr.event?.name}</p>
+                    <p className="text-gray-400 text-xs mt-2">
+                      {window.location.origin}/team/{selectedTeamForQr.id}/event/{selectedTeamForQr.event?.id}
+                    </p>
+                  </div>
+                  
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => copyTeamUrl(selectedTeamForQr, selectedTeamForQr.event)}
+                      className="flex-1 flex items-center justify-center space-x-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                    >
+                      <Copy className="w-4 h-4" />
+                      <span>Link kopieren</span>
+                    </button>
+                    <button
+                      onClick={() => setShowQrCodeModal(false)}
+                      className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+                    >
+                      Schließen
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
