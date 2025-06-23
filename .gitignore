@@ -134,8 +134,8 @@ test-results/
 coverage/
 
 # PM2 files
-ecosystem.config.js
 .pm2/
+logs/
 
 # Docker files (if using Docker)
 docker-compose.override.yml

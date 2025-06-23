@@ -422,9 +422,10 @@ const GamePlay = () => {
               </h2>
               
               {currentQuestion.description && (
-                <p className="text-gray-300 text-center mb-6">
-                  {currentQuestion.description}
-                </p>
+                <div 
+                  className="text-gray-300 text-center mb-6 rich-text-content"
+                  dangerouslySetInnerHTML={{ __html: currentQuestion.description }}
+                />
               )}
 
               {currentQuestion.image_path && (

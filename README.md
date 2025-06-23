@@ -198,6 +198,111 @@ npm run migrate:rollback  # Migration rückgängig
 - Touch-optimierte Buttons
 - Responsive Layout für alle Bildschirmgrößen
 - QR-Code-Scanner-Integration
+
+## 🚀 Production Deployment
+
+### Schnell-Deployment
+```bash
+# Alle Dependencies installieren
+npm run install:all
+
+# Production Build erstellen und starten
+npm run start:prod
+```
+
+### Manuelles Production Setup
+```bash
+# 1. Environment auf Production setzen
+export NODE_ENV=production
+
+# 2. Dependencies installieren
+npm run install:all
+
+# 3. React App bauen
+npm run build
+
+# 4. Datenbank migrieren
+npm run migrate
+
+# 5. Server starten
+npm start
+```
+
+### Environment-Variablen für Production
+```env
+# Wichtig: NODE_ENV auf production setzen
+NODE_ENV=production
+
+# Server Configuration
+PORT=3001
+
+# Database Configuration (Production DB)
+DB_HOST=your-production-db-host
+DB_PORT=3306
+DB_USER=your-production-db-user
+DB_PASSWORD=your-secure-production-password
+DB_NAME=unlockit_production
+
+# Security (Starke Secrets verwenden!)
+JWT_SECRET=your-super-secure-jwt-secret-for-production
+SESSION_SECRET=your-super-secure-session-secret-for-production
+
+# Rate Limiting (Produktionseinstellungen)
+RATE_LIMIT_WINDOW_MS=900000  # 15 Minuten
+RATE_LIMIT_MAX_REQUESTS=100   # Max 100 Requests pro IP
+```
+
+### Production Features
+- ✅ **Static File Serving**: React Build wird direkt vom Node.js Server serviert
+- ✅ **Rate Limiting**: Automatisch aktiviert in Production
+- ✅ **Security Headers**: Helmet.js für zusätzliche Sicherheit  
+- ✅ **Error Handling**: Robuste Fehlerbehandlung
+- ✅ **Single Port**: Alles läuft auf einem Port (Standard: 3001)
+
+### Verfügbare Scripts
+```bash
+npm run install:all    # Alle Dependencies installieren
+npm run build         # React App bauen
+npm start            # Production Server starten
+npm run start:prod   # Build + Start in einem Befehl
+npm run migrate      # Datenbank migrieren
+
+# PM2 Process Management (empfohlen für Production)
+npm run start:pm2    # Mit PM2 starten
+npm run stop:pm2     # PM2 Process stoppen
+npm run restart:pm2  # PM2 Process neustarten
+npm run logs:pm2     # PM2 Logs anzeigen
+```
+
+### PM2 Process Management (Empfohlen)
+```bash
+# PM2 global installieren
+npm install -g pm2
+
+# App mit PM2 starten
+npm run start:pm2
+
+# Status überprüfen
+pm2 status
+
+# Logs verfolgen
+npm run logs:pm2
+
+# Bei System-Neustart automatisch starten
+pm2 startup
+pm2 save
+```
+
+### Deployment-Checklist
+- [ ] `.env` Datei mit Production-Werten erstellen
+- [ ] `NODE_ENV=production` setzen
+- [ ] Starke JWT/Session Secrets verwenden
+- [ ] Production-Datenbank konfigurieren
+- [ ] `npm run install:all` ausführen
+- [ ] `npm run migrate` ausführen
+- [ ] `npm run start:prod` ausführen
+- [ ] Port 3001 freigeben/weiterleiten
+- [ ] SSL-Zertifikat konfigurieren (empfohlen)
 - Offline-Verhalten bei Verbindungsproblemen
 
 ## 🚀 Production Deployment

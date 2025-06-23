@@ -275,15 +275,44 @@ const initServer = async () => {
     });
   });
 
+  // Serve static files from React build (production only)
+  if (process.env.NODE_ENV === 'production') {
+    console.log('🚀 Serving React build files for production');
+    
+    // Serve static files from the React build folder
+    app.use(express.static(path.join(__dirname, '../client/build')));
+    
+    // Handle React routing - send all non-API requests to React app
+    app.get('*', (req, res) => {
+      // Don't serve React app for API routes
+      if (req.path.startsWith('/api/')) {
+        return res.status(404).json({ error: 'API route not found' });
+      }
+      
+      res.sendFile(path.join(__dirname, '../client/build', 'index.html'));
+    });
+  } else {
+    console.log('⚠️ Development mode - React app served by Create React App dev server');
+    
+    // 404 handler for development (API routes only)
+    app.use('/api/*', (req, res) => {
+      res.status(404).json({ error: 'API route not found' });
+    });
+    
+    // For non-API routes in development, just return a message
+    app.use('*', (req, res) => {
+      res.status(200).json({ 
+        message: 'UnlockIt API Server', 
+        mode: 'development',
+        note: 'React app is served by Create React App dev server on port 3000'
+      });
+    });
+  }
+
   // Error handling middleware
   app.use((err, req, res, next) => {
     console.error(err.stack);
     res.status(500).json({ error: 'Something went wrong!' });
-  });
-
-  // 404 handler
-  app.use('*', (req, res) => {
-    res.status(404).json({ error: 'Route not found' });
   });
 
   const PORT = process.env.PORT || 3001;

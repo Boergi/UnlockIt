@@ -4,6 +4,8 @@ import axios from 'axios';
 import toast from 'react-hot-toast';
 import { Plus, Edit, Trash2, Clock, Star, FileImage, X, Eye } from 'lucide-react';
 import ConfirmationModal from '../components/ConfirmationModal';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 
 const QuestionManagement = () => {
   const [questions, setQuestions] = useState([]);
@@ -23,6 +25,25 @@ const QuestionManagement = () => {
     tip_2: '',
     image: null
   });
+
+  // Quill editor configuration
+  const quillModules = {
+    toolbar: [
+      [{ 'header': [1, 2, 3, false] }],
+      ['bold', 'italic', 'underline', 'strike'],
+      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+      [{ 'indent': '-1'}, { 'indent': '+1' }],
+      ['link'],
+      [{ 'align': [] }],
+      [{ 'color': [] }, { 'background': [] }],
+      ['clean']
+    ]
+  };
+
+  const quillFormats = [
+    'header', 'bold', 'italic', 'underline', 'strike',
+    'list', 'bullet', 'indent', 'link', 'align', 'color', 'background'
+  ];
 
   useEffect(() => {
     fetchQuestions();
@@ -62,6 +83,10 @@ const QuestionManagement = () => {
     } else {
       setFormData({ ...formData, [name]: value });
     }
+  };
+
+  const handleDescriptionChange = (content) => {
+    setFormData({ ...formData, description: content });
   };
 
   const handleSubmit = async (e) => {
@@ -250,14 +275,22 @@ const QuestionManagement = () => {
 
               <div>
                 <label className="block text-white font-medium mb-2">Beschreibung</label>
-                <textarea
-                  name="description"
-                  value={formData.description}
-                  onChange={handleInputChange}
-                  rows="3"
-                  className="w-full bg-white/20 text-white border border-white/30 rounded-lg px-4 py-2 placeholder-gray-400"
-                  placeholder="Detaillierte Beschreibung der Frage"
-                />
+                <div className="bg-white rounded-lg">
+                  <ReactQuill
+                    value={formData.description}
+                    onChange={handleDescriptionChange}
+                    modules={quillModules}
+                    formats={quillFormats}
+                    placeholder="Detaillierte Beschreibung der Frage..."
+                    style={{
+                      backgroundColor: 'white',
+                      borderRadius: '8px'
+                    }}
+                  />
+                </div>
+                <p className="text-gray-400 text-sm mt-1">
+                  Verwende die Formatierungsoptionen, um deine Beschreibung zu gestalten
+                </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -393,9 +426,10 @@ const QuestionManagement = () => {
                   </div>
                   
                   {question.description && (
-                    <p className="text-gray-300 text-sm mb-3 line-clamp-2">
-                      {question.description}
-                    </p>
+                    <div 
+                      className="text-gray-300 text-sm mb-3 line-clamp-2 rich-text-content"
+                      dangerouslySetInnerHTML={{ __html: question.description }}
+                    />
                   )}
                   
                   <div className="space-y-2 text-sm">
@@ -473,9 +507,10 @@ const QuestionManagement = () => {
                     </h2>
                     
                     {previewQuestion.description && (
-                      <p className="text-gray-300 text-center mb-6 text-lg leading-relaxed">
-                        {previewQuestion.description}
-                      </p>
+                      <div 
+                        className="text-gray-300 text-center mb-6 text-lg leading-relaxed rich-text-content"
+                        dangerouslySetInnerHTML={{ __html: previewQuestion.description }}
+                      />
                     )}
 
                     {previewQuestion.image_path && (

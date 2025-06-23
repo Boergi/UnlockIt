@@ -89,4 +89,80 @@ code {
 
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.5);
-} 
+}
+
+/* Rich text content styling */
+.rich-text-content {
+  line-height: 1.6;
+}
+
+.rich-text-content h1,
+.rich-text-content h2,
+.rich-text-content h3 {
+  color: white;
+  font-weight: bold;
+  margin: 1rem 0 0.5rem 0;
+}
+
+.rich-text-content h1 {
+  font-size: 1.5rem;
+}
+
+.rich-text-content h2 {
+  font-size: 1.25rem;
+}
+
+.rich-text-content h3 {
+  font-size: 1.125rem;
+}
+
+.rich-text-content p {
+  margin: 0.5rem 0;
+}
+
+.rich-text-content strong {
+  font-weight: bold;
+  color: #fbbf24;
+}
+
+.rich-text-content em {
+  font-style: italic;
+  color: #a78bfa;
+}
+
+.rich-text-content u {
+  text-decoration: underline;
+}
+
+.rich-text-content ol,
+.rich-text-content ul {
+  margin: 0.5rem 0;
+  padding-left: 1.5rem;
+}
+
+.rich-text-content li {
+  margin: 0.25rem 0;
+}
+
+.rich-text-content a {
+  color: #60a5fa;
+  text-decoration: underline;
+}
+
+.rich-text-content a:hover {
+  color: #93c5fd;
+}
+
+/* Quill editor dark theme adjustments */
+.ql-toolbar {
+  border-top: 1px solid #ccc !important;
+  border-left: 1px solid #ccc !important;
+  border-right: 1px solid #ccc !important;
+}
+
+.ql-container {
+  border-bottom: 1px solid #ccc !important;
+  border-left: 1px solid #ccc !important;
+  border-right: 1px solid #ccc !important;
+  font-size: 16px;
+}
