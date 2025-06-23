@@ -1,10 +1,17 @@
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 const { authenticateToken } = require('./auth');
 const router = express.Router();
 
 const knex = require('knex')(require('../knexfile')[process.env.NODE_ENV || 'development']);
+
+// Ensure uploads/questions directory exists
+const questionsUploadDir = '../uploads/questions';
+if (!fs.existsSync(questionsUploadDir)) {
+  fs.mkdirSync(questionsUploadDir, { recursive: true });
+}
 
 // Get all questions (for admin - independent question catalog)
 router.get('/', authenticateToken, async (req, res) => {
@@ -23,18 +30,18 @@ router.get('/', authenticateToken, async (req, res) => {
 // Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, 'uploads/');
+    cb(null, 'server/uploads/questions/');
   },
   filename: function (req, file, cb) {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+    cb(null, 'question-' + uniqueSuffix + path.extname(file.originalname));
   }
 });
 
 const upload = multer({
   storage: storage,
   limits: {
-    fileSize: parseInt(process.env.MAX_FILE_SIZE) || 5 * 1024 * 1024 // 5MB
+    fileSize: parseInt(process.env.MAX_FILE_SIZE) || 10 * 1024 * 1024 // 10MB
   },
   fileFilter: function (req, file, cb) {
     const allowedTypes = /jpeg|jpg|png|gif|webp/;
@@ -112,7 +119,7 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
     };
 
     if (req.file) {
-      questionData.image_path = req.file.filename;
+      questionData.image_path = `/uploads/questions/${req.file.filename}`;
     }
 
     const [questionId] = await knex('questions').insert(questionData);
@@ -151,7 +158,7 @@ router.put('/:id', authenticateToken, upload.single('image'), async (req, res) =
     };
 
     if (req.file) {
-      updateData.image_path = req.file.filename;
+      updateData.image_path = `/uploads/questions/${req.file.filename}`;
     }
 
     await knex('questions')

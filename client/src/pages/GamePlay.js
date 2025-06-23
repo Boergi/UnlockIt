@@ -442,7 +442,7 @@ const GamePlay = () => {
               {currentQuestion.image_path && (
                 <div className="text-center mb-6">
                   <img
-                    src={`/uploads/${currentQuestion.image_path}`}
+                    src={currentQuestion.image_path}
                     alt="Rätsel-Bild"
                     className="max-w-full max-h-64 mx-auto rounded-lg shadow-lg"
                   />
