@@ -19,13 +19,18 @@ export const SocketProvider = ({ children }) => {
     const newSocket = io(process.env.REACT_APP_SOCKET_URL || 'http://localhost:3001');
     
     newSocket.on('connect', () => {
-      console.log('Connected to server');
+      console.log('🔌 Connected to server, Socket ID:', newSocket.id);
       setConnected(true);
     });
 
     newSocket.on('disconnect', () => {
-      console.log('Disconnected from server');
+      console.log('🔌 Disconnected from server');
       setConnected(false);
+    });
+
+    // Add general event listener to see all incoming events
+    newSocket.onAny((eventName, ...args) => {
+      console.log('🔌 Socket event received:', eventName, args);
     });
 
     setSocket(newSocket);
@@ -37,7 +42,10 @@ export const SocketProvider = ({ children }) => {
 
   const joinEvent = (eventId) => {
     if (socket) {
+      console.log('🔌 Joining event:', eventId, 'Socket connected:', socket.connected);
       socket.emit('join-event', eventId);
+    } else {
+      console.log('🔌 Cannot join event - no socket connection');
     }
   };
 
@@ -67,6 +75,39 @@ export const SocketProvider = ({ children }) => {
     }
   };
 
+  const onTeamProgressUpdate = (callback) => {
+    if (socket) {
+      socket.on('team-progress-update', callback);
+      return () => socket.off('team-progress-update', callback);
+    }
+  };
+
+  const onEventStatsUpdate = (callback) => {
+    if (socket) {
+      socket.on('event-stats-update', callback);
+      return () => socket.off('event-stats-update', callback);
+    }
+  };
+
+  const requestLiveData = (type, params) => {
+    if (socket) {
+      console.log('🔌 Requesting live data:', type, params, 'Socket connected:', socket.connected);
+      socket.emit('request-live-data', { type, params });
+    } else {
+      console.log('🔌 Cannot request live data - no socket connection');
+    }
+  };
+
+  const onLiveDataUpdate = (callback) => {
+    if (socket) {
+      socket.on('live-data-update', (data) => {
+        console.log('🔌 SocketContext: live-data-update received:', data);
+        callback(data);
+      });
+      return () => socket.off('live-data-update', callback);
+    }
+  };
+
   const value = {
     socket,
     connected,
@@ -74,7 +115,11 @@ export const SocketProvider = ({ children }) => {
     emitTeamJoined,
     emitAnswerSubmitted,
     onTeamUpdate,
-    onScoreboardUpdate
+    onScoreboardUpdate,
+    onTeamProgressUpdate,
+    onEventStatsUpdate,
+    requestLiveData,
+    onLiveDataUpdate
   };
 
   return (

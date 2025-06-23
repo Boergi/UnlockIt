@@ -513,6 +513,20 @@ const TeamEventPage = () => {
                 <p className="text-gray-300">Lade Fragen...</p>
               )}
             </div>
+
+            {/* Scoreboard Button */}
+            <div className="text-center">
+              <button
+                onClick={() => window.open(`/scoreboard/${eventId}`, '_blank')}
+                className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-yellow-500 to-amber-600 hover:from-yellow-600 hover:to-amber-700 text-white font-medium rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
+              >
+                <Trophy className="w-5 h-5 mr-2" />
+                Live Scoreboard anzeigen
+              </button>
+              <p className="text-gray-400 text-sm mt-2">
+                Schaut euch an, wie ihr im Vergleich zu anderen Teams steht
+              </p>
+            </div>
                      </div>
          )}
 

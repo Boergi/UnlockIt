@@ -7,7 +7,7 @@ import { Trophy, Medal, Award, Users, Target, Clock, ArrowLeft } from 'lucide-re
 const Scoreboard = () => {
   const { eventId } = useParams();
   const navigate = useNavigate();
-  const { joinEvent, onScoreboardUpdate } = useSocket();
+  const { joinEvent, requestLiveData, onLiveDataUpdate, connected } = useSocket();
   
   const [event, setEvent] = useState(null);
   const [scoreboard, setScoreboard] = useState([]);
@@ -15,25 +15,59 @@ const Scoreboard = () => {
   const [currentTeam, setCurrentTeam] = useState(null);
 
   useEffect(() => {
+    console.log('🔄 Scoreboard useEffect triggered for eventId:', eventId);
+    
     loadEventAndScoreboard();
     loadCurrentTeam();
+  }, [eventId]);
+
+  // Separate useEffect for Socket.IO that waits for connection
+  useEffect(() => {
+    if (!connected) {
+      console.log('🔌 Socket not connected yet, waiting...');
+      return;
+    }
+
+    console.log('🔗 Socket connected! Joining event:', eventId);
     joinEvent(eventId);
 
-    // Listen for real-time updates
-    const cleanup = onScoreboardUpdate((data) => {
-      if (data.eventId === eventId) {
-        loadScoreboard();
+    // Listen for real-time updates via Socket.IO
+    const cleanup = onLiveDataUpdate((data) => {
+      console.log('📊 Socket.IO data received:', data);
+      console.log('📊 Data type:', data.type, 'Expected: scoreboard');
+      console.log('📊 Data eventId:', data.eventId, 'Expected:', parseInt(eventId));
+      console.log('📊 EventId comparison:', data.eventId === parseInt(eventId));
+      
+      if (data.type === 'scoreboard' && data.eventId === parseInt(eventId)) {
+        console.log('✅ Updating scoreboard with new data:', data.data);
+        setScoreboard(data.data);
+      } else {
+        console.log('❌ Ignoring data - type or eventId mismatch');
       }
     });
 
-    // Refresh scoreboard every 30 seconds
-    const interval = setInterval(loadScoreboard, 30000);
+    // Request initial scoreboard data
+    console.log('📡 Requesting initial scoreboard data for eventId:', eventId);
+    requestLiveData('scoreboard', { eventId });
+
+    // Add a test to verify Socket.IO is working
+    setTimeout(() => {
+      console.log('🧪 Testing Socket.IO connection - requesting scoreboard data');
+      requestLiveData('scoreboard', { eventId });
+    }, 2000);
+
+    // Refresh scoreboard every 10 seconds as backup
+    const interval = setInterval(() => {
+      console.log('⏰ Backup refresh - requesting scoreboard data');
+      requestLiveData('scoreboard', { eventId });
+    }, 10000);
 
     return () => {
+      console.log('🧹 Cleaning up scoreboard listeners');
       cleanup && cleanup();
       clearInterval(interval);
     };
-  }, [eventId]);
+  }, [connected, eventId]);
 
   const loadCurrentTeam = () => {
     try {

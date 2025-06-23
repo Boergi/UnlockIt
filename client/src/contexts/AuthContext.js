@@ -17,6 +17,7 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [lastVerification, setLastVerification] = useState(0);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -27,7 +28,17 @@ export const AuthProvider = ({ children }) => {
     verifyToken();
   }, []);
 
-  const verifyToken = async () => {
+  const verifyToken = async (force = false) => {
+    // Prevent too frequent verification calls (max once per 5 minutes)
+    const now = Date.now();
+    const FIVE_MINUTES = 5 * 60 * 1000;
+    
+    if (!force && (now - lastVerification) < FIVE_MINUTES && user) {
+      console.log('🔍 Frontend: Skipping verification - too recent');
+      setLoading(false);
+      return;
+    }
+
     try {
       console.log('🔍 Frontend: Verifying token/session...');
       console.log('🔍 Frontend: Cookies will be sent:', document.cookie ? 'Yes' : 'No');
@@ -35,15 +46,18 @@ export const AuthProvider = ({ children }) => {
       const response = await axios.get('/api/auth/verify');
       console.log('✅ Frontend: Verification successful:', response.data.user);
       setUser(response.data.user);
+      setLastVerification(now);
     } catch (error) {
       console.error('❌ Frontend: Token verification failed:', error.response?.status, error.response?.data);
       
-      // Try session test to debug
-      try {
-        const sessionTest = await axios.get('/api/auth/session-test');
-        console.log('🔍 Frontend: Session test result:', sessionTest.data);
-      } catch (sessionError) {
-        console.error('❌ Frontend: Session test failed:', sessionError);
+      // Only try session test if it's not a rate limit error
+      if (error.response?.status !== 429) {
+        try {
+          const sessionTest = await axios.get('/api/auth/session-test');
+          console.log('🔍 Frontend: Session test result:', sessionTest.data);
+        } catch (sessionError) {
+          console.error('❌ Frontend: Session test failed:', sessionError);
+        }
       }
       
       // Clear localStorage but don't call logout() to avoid infinite loop
@@ -51,6 +65,7 @@ export const AuthProvider = ({ children }) => {
       localStorage.removeItem('user');
       delete axios.defaults.headers.common['Authorization'];
       setUser(null);
+      setLastVerification(0);
     } finally {
       setLoading(false);
     }

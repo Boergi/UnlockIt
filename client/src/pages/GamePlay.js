@@ -8,7 +8,7 @@ import { Lock, Clock, Lightbulb, Send, CheckCircle, XCircle, Trophy } from 'luci
 const GamePlay = () => {
   const { teamId } = useParams();
   const navigate = useNavigate();
-  const { joinEvent, emitAnswerSubmitted } = useSocket();
+  const { joinEvent, emitAnswerSubmitted, requestLiveData, onLiveDataUpdate } = useSocket();
   
   const [team, setTeam] = useState(null);
   const [currentQuestion, setCurrentQuestion] = useState(null);
@@ -48,33 +48,36 @@ const GamePlay = () => {
     return () => clearInterval(timer);
   }, [timeLeft, currentQuestion, gameCompleted]);
 
-  // Load team score and position
-  const loadTeamScoreAndPosition = async () => {
+  // Load team score and position via Socket.IO
+  const loadTeamScoreAndPosition = () => {
     if (!team) return;
-    
-    try {
-      const response = await axios.get(`/api/game/event/${team.event_id}/scoreboard`);
-      const scoreboard = response.data;
-      
-      // Find current team's position and score
-      const teamIndex = scoreboard.findIndex(t => t.id === parseInt(teamId));
-      if (teamIndex >= 0) {
-        setTeamPosition(teamIndex + 1);
-        setTeamScore(scoreboard[teamIndex].total_points || 0);
-      }
-    } catch (error) {
-      console.error('Error loading team score:', error);
-    }
+    requestLiveData('scoreboard', { eventId: team.event_id });
   };
 
   useEffect(() => {
     if (team) {
       loadTeamScoreAndPosition();
-      // Refresh score every 30 seconds
+      // Refresh score every 30 seconds via Socket.IO
       const interval = setInterval(loadTeamScoreAndPosition, 30000);
       return () => clearInterval(interval);
     }
   }, [team]);
+
+  // Listen for live scoreboard updates
+  useEffect(() => {
+    const cleanup = onLiveDataUpdate((data) => {
+      if (data.type === 'scoreboard' && data.eventId === team?.event_id) {
+        const scoreboard = data.data;
+        const teamIndex = scoreboard.findIndex(t => t.id === parseInt(teamId));
+        if (teamIndex >= 0) {
+          setTeamPosition(teamIndex + 1);
+          setTeamScore(scoreboard[teamIndex].total_points || 0);
+        }
+      }
+    });
+    
+    return cleanup;
+  }, [team, teamId]);
 
   // Load available tips for current question
   const loadAvailableTips = async (questionId) => {

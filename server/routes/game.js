@@ -1,9 +1,11 @@
 const express = require('express');
 const ExcelJS = require('exceljs');
 const { authenticateToken } = require('./auth');
-const router = express.Router();
 
 const knex = require('knex')(require('../knexfile')[process.env.NODE_ENV || 'development']);
+
+module.exports = (io, broadcastScoreboardUpdate) => {
+  const router = express.Router();
 
 // Get current question for team
 router.get('/team/:teamId/current-question', async (req, res) => {
@@ -410,6 +412,16 @@ router.post('/question/:questionId/answer', async (req, res) => {
           points_awarded: points
         });
 
+      // Get team info to broadcast scoreboard update
+      const team = await knex('teams').where({ id: teamId }).first();
+      if (team) {
+        console.log(`🎯 Correct answer! Broadcasting scoreboard update for event ${team.event_id}`);
+        // Broadcast scoreboard update to all clients in this event
+        broadcastScoreboardUpdate(team.event_id);
+      } else {
+        console.log(`❌ Team ${teamId} not found for scoreboard update`);
+      }
+
       res.json({ correct: true, points });
     } else {
       const attemptsUsed = [progress.attempt_1, progress.attempt_2, progress.attempt_3]
@@ -517,4 +529,5 @@ router.get('/event/:eventId/export', authenticateToken, async (req, res) => {
   }
 });
 
-module.exports = router; 
+  return router;
+}; 
