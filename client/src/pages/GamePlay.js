@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSocket } from '../contexts/SocketContext';
 import axios from 'axios';
@@ -30,15 +30,47 @@ const GamePlay = () => {
     loadTeamAndQuestion();
   }, [teamId]);
 
+  // Mark question as completed (for timeout or solution tip usage)
+  const completeQuestion = useCallback(async (reason) => {
+    if (!currentQuestion || !team) return;
+    
+    try {
+      await axios.post(`/api/game/question/${currentQuestion.id}/complete`, {
+        teamId: teamId,
+        reason
+      });
+      
+      setQuestionCompleted(true);
+      setCompletionReason(reason);
+      
+      const reasonText = {
+        'timeout': 'Zeit abgelaufen',
+        'max_attempts': 'Alle Versuche aufgebraucht',
+        'solution': 'Lösung angezeigt'
+      }[reason] || reason;
+      
+      toast(`Frage abgeschlossen (${reasonText})`, {
+        icon: '⏰',
+        duration: 3000
+      });
+      
+    } catch (error) {
+      console.error('Error completing question:', error);
+      toast.error('Fehler beim Abschließen der Frage');
+    }
+  }, [currentQuestion, team, teamId]);
+
   useEffect(() => {
     let timer;
-    if (timeLeft > 0 && currentQuestion && !gameCompleted) {
+    if (timeLeft > 0 && currentQuestion && !gameCompleted && !questionCompleted) {
       timer = setInterval(() => {
         setTimeLeft(prev => {
           if (prev <= 1) {
-            toast.error('Zeit abgelaufen!');
-            // Mark question as completed due to timeout
-            completeQuestion('timeout');
+            // Use setTimeout to avoid state update during render
+            setTimeout(() => {
+              toast.error('Zeit abgelaufen!');
+              completeQuestion('timeout');
+            }, 0);
             return 0;
           }
           return prev - 1;
@@ -46,7 +78,7 @@ const GamePlay = () => {
       }, 1000);
     }
     return () => clearInterval(timer);
-  }, [timeLeft, currentQuestion, gameCompleted]);
+  }, [timeLeft, currentQuestion, gameCompleted, questionCompleted, completeQuestion]);
 
   // Load team score and position via Socket.IO
   const loadTeamScoreAndPosition = () => {
@@ -87,36 +119,6 @@ const GamePlay = () => {
     } catch (error) {
       console.error('Error loading available tips:', error);
       setAvailableTips([]);
-    }
-  };
-
-  // Mark question as completed (for timeout or solution tip usage)
-  const completeQuestion = async (reason) => {
-    if (!currentQuestion || !team) return;
-    
-    try {
-      await axios.post(`/api/game/question/${currentQuestion.id}/complete`, {
-        teamId: team.id,
-        reason
-      });
-      
-      setQuestionCompleted(true);
-      setCompletionReason(reason);
-      
-      const reasonText = {
-        'timeout': 'Zeit abgelaufen',
-        'max_attempts': 'Alle Versuche aufgebraucht',
-        'solution': 'Lösung angezeigt'
-      }[reason] || reason;
-      
-      toast(`Frage abgeschlossen (${reasonText})`, {
-        icon: '⏰',
-        duration: 3000
-      });
-      
-    } catch (error) {
-      console.error('Error completing question:', error);
-      toast.error('Fehler beim Abschließen der Frage');
     }
   };
 
