@@ -75,6 +75,8 @@ const TeamEventPage = () => {
 
   const loadTeamAndEvent = async () => {
     try {
+      console.log('🔍 Loading team and event with IDs:', { teamId, eventId });
+      
       const [teamResponse, eventResponse] = await Promise.all([
         axios.get(`/api/teams/${teamId}`),
         axios.get(`/api/events/${eventId}`)
@@ -83,8 +85,60 @@ const TeamEventPage = () => {
       const teamData = teamResponse.data;
       const eventData = eventResponse.data;
 
-      // Verify team belongs to this event
-      if (teamData.event_id !== parseInt(eventId)) {
+      console.log('📋 Team data received:', teamData);
+      console.log('📋 Event data received:', eventData);
+
+      // Verify team belongs to this event - handle both UUIDs and numeric IDs
+      // Team can be linked to event via:
+      // 1. team.event_uuid === event.uuid (new UUID system)
+      // 2. team.event_id === event.id (old numeric system)
+      // 3. URL parameters might be either UUIDs or numeric IDs
+      
+      const teamEventId = teamData.event_id;
+      const teamEventUuid = teamData.event_uuid;
+      const eventId_numeric = eventData.id;
+      const eventUuid = eventData.uuid;
+      const urlEventId = eventId;
+      
+      console.log('🔍 Validation parameters:', {
+        teamEventId,
+        teamEventUuid,
+        eventId_numeric,
+        eventUuid,
+        urlEventId
+      });
+      
+      const uuidMatch = teamEventUuid && eventUuid && teamEventUuid === eventUuid;
+      const numericMatch = teamEventId && eventId_numeric && teamEventId === eventId_numeric;
+      const urlUuidMatch = teamEventUuid && teamEventUuid === urlEventId;
+      const urlNumericMatch = teamEventId && teamEventId === parseInt(urlEventId);
+      const eventUuidMatch = eventUuid && eventUuid === urlEventId;
+      const eventNumericMatch = eventId_numeric && eventId_numeric === parseInt(urlEventId);
+      
+      console.log('🔍 Match results:', {
+        uuidMatch,
+        numericMatch,
+        urlUuidMatch,
+        urlNumericMatch,
+        eventUuidMatch,
+        eventNumericMatch
+      });
+      
+      const teamBelongsToEvent = 
+        uuidMatch || numericMatch || urlUuidMatch || urlNumericMatch || eventUuidMatch || eventNumericMatch;
+      
+      console.log('✅ Team belongs to event:', teamBelongsToEvent);
+      
+      if (!teamBelongsToEvent) {
+        console.log('❌ Team validation failed - detailed info:', {
+          teamEventId,
+          teamEventUuid,
+          eventId_numeric,
+          eventUuid,
+          urlEventId,
+          teamData,
+          eventData
+        });
         toast.error('Team gehört nicht zu diesem Event');
         navigate('/');
         return;
@@ -93,16 +147,16 @@ const TeamEventPage = () => {
       setTeam(teamData);
       setEvent(eventData);
       
-      // Store in localStorage for automatic navigation
+      // Store in localStorage for automatic navigation - use UUIDs when available
       localStorage.setItem('currentTeam', JSON.stringify({
-        teamId: teamData.id,
-        eventId: eventData.id,
+        teamId: teamData.uuid || teamData.id,
+        eventId: eventData.uuid || eventData.id,
         teamName: teamData.name,
         eventName: eventData.name
       }));
 
       // Generate QR Code for this team page
-      generateQrCode(teamData.id, eventData.id);
+      generateQrCode(teamData.uuid || teamData.id, eventData.uuid || eventData.id);
 
       updateCountdown();
     } catch (error) {
@@ -178,7 +232,10 @@ const TeamEventPage = () => {
 
   const generateQrCode = async (teamId, eventId) => {
     try {
-      const teamPageUrl = `${window.location.origin}/team/${teamId}/event/${eventId}`;
+      // Use UUIDs if available, fall back to IDs
+      const teamIdentifier = team?.uuid || teamId;
+      const eventIdentifier = event?.uuid || eventId;
+      const teamPageUrl = `${window.location.origin}/team/${teamIdentifier}/event/${eventIdentifier}`;
       const qrCodeDataUrl = await QRCode.toDataURL(teamPageUrl, {
         width: 256,
         margin: 2,
@@ -194,7 +251,10 @@ const TeamEventPage = () => {
   };
 
   const copyTeamUrl = async () => {
-    const teamPageUrl = `${window.location.origin}/team/${team.id}/event/${event.id}`;
+    // Use UUIDs if available, fall back to IDs
+    const teamIdentifier = team?.uuid || team?.id;
+    const eventIdentifier = event?.uuid || event?.id;
+    const teamPageUrl = `${window.location.origin}/team/${teamIdentifier}/event/${eventIdentifier}`;
     try {
       await navigator.clipboard.writeText(teamPageUrl);
       toast.success('Team-Link kopiert!');
@@ -517,7 +577,7 @@ const TeamEventPage = () => {
             {/* Scoreboard Button */}
             <div className="text-center">
               <button
-                onClick={() => window.open(`/scoreboard/${eventId}`, '_blank')}
+                onClick={() => window.open(`/scoreboard/${event?.uuid || eventId}`, '_blank')}
                 className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-yellow-500 to-amber-600 hover:from-yellow-600 hover:to-amber-700 text-white font-medium rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
               >
                 <Trophy className="w-5 h-5 mr-2" />

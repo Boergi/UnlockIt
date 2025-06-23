@@ -379,7 +379,10 @@ const EventManagement = () => {
 
   const generateTeamQrCode = async (team, event) => {
     try {
-      const teamPageUrl = `${window.location.origin}/team/${team.id}/event/${event.id}`;
+      // Use UUIDs if available, fall back to IDs
+      const teamIdentifier = team?.uuid || team?.id;
+      const eventIdentifier = event?.uuid || event?.id;
+      const teamPageUrl = `${window.location.origin}/team/${teamIdentifier}/event/${eventIdentifier}`;
       const qrCodeDataUrl = await QRCode.toDataURL(teamPageUrl, {
         width: 256,
         margin: 2,
@@ -398,7 +401,10 @@ const EventManagement = () => {
   };
 
   const copyTeamUrl = async (team, event) => {
-    const teamPageUrl = `${window.location.origin}/team/${team.id}/event/${event.id}`;
+    // Use UUIDs if available, fall back to IDs
+    const teamIdentifier = team?.uuid || team?.id;
+    const eventIdentifier = event?.uuid || event?.id;
+    const teamPageUrl = `${window.location.origin}/team/${teamIdentifier}/event/${eventIdentifier}`;
     try {
       await navigator.clipboard.writeText(teamPageUrl);
       toast.success('Team-Link kopiert!');
@@ -542,7 +548,7 @@ const EventManagement = () => {
                         Bearbeiten
                       </button>
                       <Link
-                        to={`/scoreboard/${event.id}`}
+                        to={`/scoreboard/${event.uuid || event.id}`}
                         className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm transition-colors flex items-center"
                         title="Scoreboard anzeigen"
                       >
@@ -1074,7 +1080,7 @@ const EventManagement = () => {
                     <p className="text-white font-medium mb-1">Team: {selectedTeamForQr.name}</p>
                     <p className="text-gray-300 text-sm">Event: {selectedTeamForQr.event?.name}</p>
                     <p className="text-gray-400 text-xs mt-2">
-                      {window.location.origin}/team/{selectedTeamForQr.id}/event/{selectedTeamForQr.event?.id}
+                      {window.location.origin}/team/{selectedTeamForQr.uuid || selectedTeamForQr.id}/event/{selectedTeamForQr.event?.uuid || selectedTeamForQr.event?.id}
                     </p>
                   </div>
                   

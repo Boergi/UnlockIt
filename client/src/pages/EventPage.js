@@ -39,7 +39,7 @@ const EventPage = () => {
       try {
         const teamData = JSON.parse(currentTeam);
         // Check if the stored team belongs to this event
-        if (teamData.eventId === parseInt(eventId)) {
+        if (teamData.eventId === parseInt(eventId) || teamData.eventId === eventId) {
           toast.success(`Willkommen zurück, Team ${teamData.teamName}!`);
           setTimeout(() => {
             navigate(`/team/${teamData.teamId}/event/${teamData.eventId}`);
@@ -178,14 +178,14 @@ const EventPage = () => {
         
         // Store team info in localStorage
         localStorage.setItem('currentTeam', JSON.stringify({
-          teamId: team.id,
-          eventId: eventId,
+          teamId: team.uuid || team.id,
+          eventId: event?.uuid || eventId,
           teamName: team.name,
           eventName: event.name
         }));
         
         setTimeout(() => {
-          navigate(`/team/${team.id}/event/${eventId}`);
+          navigate(`/team/${team.uuid || team.id}/event/${event?.uuid || eventId}`);
         }, 1500);
       }
       
@@ -242,14 +242,14 @@ const EventPage = () => {
       
       // Store team info in localStorage
       localStorage.setItem('currentTeam', JSON.stringify({
-        teamId: selectedTeam.id,
-        eventId: eventId,
+        teamId: selectedTeam.uuid || selectedTeam.id,
+        eventId: event?.uuid || eventId,
         teamName: selectedTeam.name,
         eventName: event.name
       }));
       
       setTimeout(() => {
-        navigate(`/team/${selectedTeam.id}/event/${eventId}`);
+        navigate(`/team/${selectedTeam.uuid || selectedTeam.id}/event/${event?.uuid || eventId}`);
       }, 1500);
       
     } catch (error) {
@@ -476,7 +476,7 @@ const EventPage = () => {
         {/* Scoreboard Button */}
         <div className="mt-8 text-center">
           <button
-            onClick={() => window.open(`/scoreboard/${eventId}`, '_blank')}
+            onClick={() => window.open(`/scoreboard/${event?.uuid || eventId}`, '_blank')}
             className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-yellow-500 to-amber-600 hover:from-yellow-600 hover:to-amber-700 text-white font-medium rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
           >
             <Trophy className="w-5 h-5 mr-2" />

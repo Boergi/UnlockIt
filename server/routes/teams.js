@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs').promises;
 const axios = require('axios');
 const router = express.Router();
+const { getTeamByIdOrUuid, getEventByIdOrUuid, getTeamsByEventIdOrUuid, getTeamProgressByIdOrUuid } = require('../utils/idUtils');
 
 const knex = require('knex')(require('../knexfile')[process.env.NODE_ENV || 'development']);
 
@@ -349,7 +350,7 @@ router.post('/register', async (req, res) => {
     }
 
     // Check if event exists and registration is open
-    const event = await knex('events').where({ id: event_id }).first();
+    const event = await getEventByIdOrUuid(event_id);
     if (!event) {
       return res.status(404).json({ error: 'Event not found' });
     }
@@ -365,19 +366,26 @@ router.post('/register', async (req, res) => {
 
     // Check if team name already exists for this event
     const existingTeam = await knex('teams')
-      .where({ name, event_id })
+      .where({ 
+        name, 
+        [event.uuid ? 'event_uuid' : 'event_id']: event.uuid || event.id 
+      })
       .first();
     
     if (existingTeam) {
       return res.status(409).json({ error: 'Team name already exists for this event' });
     }
 
-    const [teamId] = await knex('teams').insert({
+    const teamUuid = require('crypto').randomUUID();
+    
+    await knex('teams').insert({
+      uuid: teamUuid,
       name,
-      event_id
+      event_id: event.id,
+      event_uuid: event.uuid
     });
 
-    const team = await knex('teams').where({ id: teamId }).first();
+    const team = await knex('teams').where({ uuid: teamUuid }).first();
     res.status(201).json(team);
   } catch (error) {
     console.error('Team registration error:', error);
@@ -388,9 +396,7 @@ router.post('/register', async (req, res) => {
 // Get team details
 router.get('/:id', async (req, res) => {
   try {
-    const team = await knex('teams')
-      .where({ id: req.params.id })
-      .first();
+    const team = await getTeamByIdOrUuid(req.params.id);
     
     if (!team) {
       return res.status(404).json({ error: 'Team not found' });
@@ -573,44 +579,22 @@ router.put('/:id/logo', async (req, res) => {
 // Get team progress
 router.get('/:id/progress', async (req, res) => {
   try {
-    // First get the team to find the event
-    const team = await knex('teams').where({ id: req.params.id }).first();
-    if (!team) {
-      return res.status(404).json({ error: 'Team not found' });
+    const progress = await getTeamProgressByIdOrUuid(req.params.id);
+    
+    if (progress.length === 0) {
+      // Check if team exists
+      const team = await getTeamByIdOrUuid(req.params.id);
+      if (!team) {
+        return res.status(404).json({ error: 'Team not found' });
+      }
     }
 
-    // Get all questions for the event with their progress (if any)
-    const questionsWithProgress = await knex('questions')
-      .join('event_questions', 'questions.id', 'event_questions.question_id')
-      .leftJoin('team_progress', function() {
-        this.on('questions.id', '=', 'team_progress.question_id')
-            .andOn('team_progress.team_id', '=', knex.raw('?', [req.params.id]));
-      })
-      .where('event_questions.event_id', team.event_id)
-      .select(
-        'questions.id as question_id',
-        'questions.title as question_title',
-        'questions.difficulty',
-        'event_questions.order_index',
-        'team_progress.id as progress_id',
-        'team_progress.attempt_1',
-        'team_progress.attempt_2',
-        'team_progress.attempt_3',
-        'team_progress.used_tip',
-        'team_progress.correct',
-        'team_progress.completed',
-        'team_progress.time_started',
-        'team_progress.time_answered',
-        'team_progress.points_awarded'
-      )
-      .orderBy('event_questions.order_index');
-
     // Transform the data to match the expected format
-    const progress = questionsWithProgress.map(row => ({
-      id: row.progress_id,
+    const formattedProgress = progress.map(row => ({
+      id: row.id,
       team_id: req.params.id,
-      question_id: row.question_id,
-      question_title: row.question_title,
+      question_id: row.id,
+      question_title: row.title,
       difficulty: row.difficulty,
       order_index: row.order_index,
       attempt_1: row.attempt_1,
@@ -624,7 +608,7 @@ router.get('/:id/progress', async (req, res) => {
       points_awarded: row.points_awarded || 0
     }));
 
-    res.json(progress);
+    res.json(formattedProgress);
   } catch (error) {
     console.error('Get team progress error:', error);
     res.status(500).json({ error: 'Internal server error' });

@@ -70,8 +70,9 @@ const AdminDashboard = () => {
 
   const handleQRCodeClick = async (event) => {
     try {
-      // Generate event page URL
-      const eventUrl = `${window.location.origin}/events/${event.id}`;
+      // Generate event page URL using UUID if available, fall back to ID
+      const eventIdentifier = event?.uuid || event?.id;
+      const eventUrl = `${window.location.origin}/events/${eventIdentifier}`;
       
       // Generate QR code
       const qrCodeDataUrl = await QRCode.toDataURL(eventUrl, {
@@ -246,13 +247,13 @@ const AdminDashboard = () => {
                       <span>QR</span>
                     </button>
                     <Link
-                      to={`/admin/events/${event.id}`}
+                      to={`/admin/events/${event.uuid || event.id}`}
                       className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm transition-colors"
                     >
                       Bearbeiten
                     </Link>
                     <a
-                      href={`http://localhost:3000/scoreboard/${event.id}`}
+                      href={`http://localhost:3000/scoreboard/${event.uuid || event.id}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm transition-colors"
@@ -306,7 +307,7 @@ const AdminDashboard = () => {
                 <div className="bg-gray-100 rounded-lg p-3 mb-4">
                   <p className="text-xs text-gray-500 mb-1">Event-URL:</p>
                   <p className="text-sm font-mono text-gray-700 break-all">
-                    {window.location.origin}/events/{qrModal.event?.id}
+                    {window.location.origin}/events/{qrModal.event?.uuid || qrModal.event?.id}
                   </p>
                 </div>
 
