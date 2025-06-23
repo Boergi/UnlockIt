@@ -294,10 +294,10 @@ const TeamEventPage = () => {
       console.log('📊 Team progress response:', response.data);
       setTeamProgress(response.data);
       
-      // Find current question (first not completed)
-      // This now includes questions that haven't been started yet
-      const currentQ = response.data.find(q => !q.completed);
-      console.log('🎯 Current question found:', currentQ);
+      // Find current question (first not completed AND already started)
+      // Only show questions that have been started via GamePlay (have time_started)
+      const currentQ = response.data.find(q => !q.completed && q.time_started);
+      console.log('🎯 Current question found (started but not completed):', currentQ);
       setCurrentQuestion(currentQ);
       
       console.log('✅ Team progress loaded. Total questions:', response.data.length);
@@ -608,25 +608,27 @@ const TeamEventPage = () => {
           <div className="space-y-6">
 
 
-            {/* Temporary Start Quiz Button */}
-            <div className="bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-lg p-6 border border-blue-500/30">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-2">
-                  <Target className="w-6 h-6 text-blue-400" />
-                  <h2 className="text-xl font-bold text-white">Quiz starten</h2>
+            {/* Start Next Question Button - only show if no current question is active */}
+            {!currentQuestion && (
+              <div className="bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-lg p-6 border border-blue-500/30">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center space-x-2">
+                    <Target className="w-6 h-6 text-blue-400" />
+                    <h2 className="text-xl font-bold text-white">Nächste Frage starten</h2>
+                  </div>
+                  <button
+                    onClick={() => navigate(`/play/${teamId}`)}
+                    className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                  >
+                    <span>Frage starten</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
                 </div>
-                <button
-                  onClick={() => navigate(`/play/${teamId}`)}
-                  className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-                >
-                  <span>Quiz starten</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
+                <div className="bg-white/10 rounded-lg p-4">
+                  <p className="text-white">Klicke hier, um die nächste Frage zu starten. Die Frage wird erst angezeigt, nachdem du sie über das GamePlay geöffnet hast.</p>
+                </div>
               </div>
-              <div className="bg-white/10 rounded-lg p-4">
-                <p className="text-white">Temporärer Button um das Quiz zu starten, während wir das Problem mit den Fragen beheben.</p>
-              </div>
-            </div>
+            )}
 
             {/* Current Question */}
             {currentQuestion && (
@@ -635,6 +637,7 @@ const TeamEventPage = () => {
                   <div className="flex items-center space-x-2">
                     <Target className="w-6 h-6 text-green-400" />
                     <h2 className="text-xl font-bold text-white">Aktuelle Frage</h2>
+                    <span className="text-xs bg-green-600 text-white px-2 py-1 rounded-full">In Bearbeitung</span>
                   </div>
                   <button
                     onClick={goToGamePlay}
@@ -648,7 +651,8 @@ const TeamEventPage = () => {
                   <h3 className="text-lg font-semibold text-white mb-2">{currentQuestion.question_title}</h3>
                   <div className="flex items-center space-x-4 text-sm text-gray-300">
                     <span>Schwierigkeit: {currentQuestion.difficulty}</span>
-                    <span>Versuche: {currentQuestion.attempts || 0}/3</span>
+                    <span>Versuche: {[currentQuestion.attempt_1, currentQuestion.attempt_2, currentQuestion.attempt_3].filter(Boolean).length}/3</span>
+                    <span>Gestartet: {new Date(currentQuestion.time_started).toLocaleTimeString('de-DE')}</span>
                   </div>
                 </div>
               </div>
