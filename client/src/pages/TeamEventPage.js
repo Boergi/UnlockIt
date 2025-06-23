@@ -54,7 +54,12 @@ const TeamEventPage = () => {
     }
   }, [isEventStarted, isEventEnded]);
 
-
+  // Trigger automatic redirect when team/event not found
+  useEffect(() => {
+    if (!loading && (!team || !event)) {
+      handleNotFoundError();
+    }
+  }, [loading, team, event]);
 
   // Socket.IO listeners for real-time updates
   useEffect(() => {
@@ -73,17 +78,119 @@ const TeamEventPage = () => {
     };
   }, [socket, teamId]);
 
+  const handleNotFoundError = async () => {
+    console.log('🧹 Cleaning up localStorage and attempting intelligent redirect...');
+    
+    // Clear localStorage
+    localStorage.removeItem('currentTeam');
+    localStorage.removeItem('teamId');
+    localStorage.removeItem('eventId');
+    
+    // Try to find the event using different approaches
+    let eventExists = false;
+    let eventData = null;
+    
+    // First try: direct event access (might fail due to UUID protection)
+    try {
+      const eventResponse = await axios.get(`/api/events/${eventId}`);
+      if (eventResponse.data) {
+        eventExists = true;
+        eventData = eventResponse.data;
+        console.log('✅ Event found via direct access');
+      }
+    } catch (eventError) {
+      console.log('❌ Direct event access failed:', eventError.response?.status);
+    }
+    
+    // Second try: load all events and find the one with matching ID/UUID
+    if (!eventExists) {
+      try {
+        const allEventsResponse = await axios.get('/api/events');
+        const foundEvent = allEventsResponse.data.find(event => 
+          event.id == eventId || 
+          event.uuid === eventId || 
+          event.id === parseInt(eventId)
+        );
+        
+        if (foundEvent) {
+          eventExists = true;
+          eventData = foundEvent;
+          console.log('✅ Event found via all events search');
+        }
+      } catch (allEventsError) {
+        console.log('❌ All events search failed:', allEventsError);
+      }
+    }
+    
+    if (eventExists && eventData) {
+      console.log('✅ Event found, redirecting to event page');
+      toast('Team nicht gefunden, aber Event existiert. Weiterleitung zur Event-Seite...', {
+        icon: 'ℹ️',
+        duration: 4000
+      });
+      setTimeout(() => {
+        // Use the correct identifier for navigation
+        const eventIdentifier = eventData.uuid || eventData.id;
+        navigate(`/events/${eventIdentifier}`);
+      }, 2000);
+      return;
+    }
+    
+    // If event doesn't exist either, go to home page
+    console.log('🏠 Event not found, redirecting to home page');
+    toast.error('Team oder Event nicht gefunden. Weiterleitung zur Startseite...');
+    setTimeout(() => {
+      navigate('/');
+    }, 2000);
+  };
+
   const loadTeamAndEvent = async () => {
     try {
       console.log('🔍 Loading team and event with IDs:', { teamId, eventId });
       
-      const [teamResponse, eventResponse] = await Promise.all([
-        axios.get(`/api/teams/${teamId}`),
-        axios.get(`/api/events/${eventId}`)
-      ]);
-
-      const teamData = teamResponse.data;
-      const eventData = eventResponse.data;
+      let teamData = null;
+      let eventData = null;
+      
+      // Try to load team - handle potential UUID protection
+      try {
+        const teamResponse = await axios.get(`/api/teams/${teamId}`);
+        teamData = teamResponse.data;
+        console.log('✅ Team loaded via direct access');
+      } catch (teamError) {
+        console.log('❌ Direct team access failed:', teamError.response?.status);
+        // Team loading failed - this is critical, so we'll handle it in the outer catch
+        throw teamError;
+      }
+      
+      // Try to load event - handle potential UUID protection
+      try {
+        const eventResponse = await axios.get(`/api/events/${eventId}`);
+        eventData = eventResponse.data;
+        console.log('✅ Event loaded via direct access');
+      } catch (eventError) {
+        console.log('❌ Direct event access failed, trying alternative approach:', eventError.response?.status);
+        
+        // Try loading all events and finding the right one
+        try {
+          const allEventsResponse = await axios.get('/api/events');
+          const foundEvent = allEventsResponse.data.find(event => 
+            event.id == eventId || 
+            event.uuid === eventId || 
+            event.id === parseInt(eventId)
+          );
+          
+          if (foundEvent) {
+            eventData = foundEvent;
+            console.log('✅ Event found via all events search');
+          } else {
+            console.log('❌ Event not found in all events list');
+            throw new Error('Event not found');
+          }
+        } catch (allEventsError) {
+          console.log('❌ All events search also failed:', allEventsError);
+          throw eventError; // Use original error
+        }
+      }
 
       console.log('📋 Team data received:', teamData);
       console.log('📋 Event data received:', eventData);
@@ -161,8 +268,7 @@ const TeamEventPage = () => {
       updateCountdown();
     } catch (error) {
       console.error('Error loading team/event:', error);
-      toast.error('Team oder Event nicht gefunden');
-      navigate('/');
+      await handleNotFoundError();
     } finally {
       setLoading(false);
     }
@@ -282,11 +388,13 @@ const TeamEventPage = () => {
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-white mb-4">Team oder Event nicht gefunden</h1>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-4"></div>
+          <p className="text-gray-300 mb-4">Versuche automatische Weiterleitung...</p>
           <button
             onClick={() => navigate('/')}
             className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
-            Zurück zur Startseite
+            Sofort zur Startseite
           </button>
         </div>
       </div>

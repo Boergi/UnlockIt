@@ -177,8 +177,8 @@ router.post('/', authenticateToken, async (req, res) => {
       uuid: eventUuid,
       name,
       start_time: formatDateForMySQL(start_time),
-      use_random_order: use_random_order || false,
-      team_registration_open: team_registration_open !== false,
+      use_random_order: Boolean(use_random_order),
+      team_registration_open: Boolean(team_registration_open),
       access_code,
       logo_url: finalLogoUrl,
       ai_logo_generated: aiLogoGenerated
@@ -196,8 +196,17 @@ router.post('/', authenticateToken, async (req, res) => {
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const { name, start_time, use_random_order, team_registration_open, access_code, logo_url, generate_ai_logo } = req.body;
+    const eventId = req.params.id;
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(eventId);
     
-    const event = await knex('events').where({ uuid: req.params.id }).first();
+    // Find event by UUID or numeric ID
+    let event;
+    if (isUUID) {
+      event = await knex('events').where({ uuid: eventId }).first();
+    } else {
+      event = await knex('events').where({ id: eventId }).first();
+    }
+    
     if (!event) {
       return res.status(404).json({ error: 'Event not found' });
     }
@@ -267,21 +276,40 @@ router.put('/:id', authenticateToken, async (req, res) => {
       }
     }
     
-    await knex('events')
-      .where({ uuid: req.params.id })
-      .update({
-        name,
-        start_time: formatDateForMySQL(start_time),
-        use_random_order,
-        team_registration_open,
-        access_code,
-        logo_url: finalLogoUrl,
-        ai_logo_generated: aiLogoGenerated,
-        updated_at: knex.fn.now()
-      });
-
-    const updatedEvent = await knex('events').where({ uuid: req.params.id }).first();
-    res.json(updatedEvent);
+    // Update event using appropriate ID field
+    if (isUUID) {
+      await knex('events')
+        .where({ uuid: eventId })
+        .update({
+          name,
+          start_time: formatDateForMySQL(start_time),
+          use_random_order,
+          team_registration_open,
+          access_code,
+          logo_url: finalLogoUrl,
+          ai_logo_generated: aiLogoGenerated,
+          updated_at: knex.fn.now()
+        });
+      
+      const updatedEvent = await knex('events').where({ uuid: eventId }).first();
+      res.json(updatedEvent);
+    } else {
+      await knex('events')
+        .where({ id: eventId })
+        .update({
+          name,
+          start_time: formatDateForMySQL(start_time),
+          use_random_order,
+          team_registration_open,
+          access_code,
+          logo_url: finalLogoUrl,
+          ai_logo_generated: aiLogoGenerated,
+          updated_at: knex.fn.now()
+        });
+      
+      const updatedEvent = await knex('events').where({ id: eventId }).first();
+      res.json(updatedEvent);
+    }
   } catch (error) {
     console.error('Update event error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -291,9 +319,19 @@ router.put('/:id', authenticateToken, async (req, res) => {
 // Delete event
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
-    const deleted = await knex('events')
-      .where({ uuid: req.params.id })
-      .del();
+    const eventId = req.params.id;
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(eventId);
+    
+    let deleted;
+    if (isUUID) {
+      deleted = await knex('events')
+        .where({ uuid: eventId })
+        .del();
+    } else {
+      deleted = await knex('events')
+        .where({ id: eventId })
+        .del();
+    }
 
     if (!deleted) {
       return res.status(404).json({ error: 'Event not found' });
@@ -309,15 +347,31 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 // Get event statistics
 router.get('/:id/stats', authenticateToken, async (req, res) => {
   try {
-    const stats = await knex('teams')
-      .where({ event_uuid: req.params.id })
-      .count('id as team_count')
-      .first();
+    const eventId = req.params.id;
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(eventId);
+    
+    let stats, questionCount;
+    if (isUUID) {
+      stats = await knex('teams')
+        .where({ event_uuid: eventId })
+        .count('id as team_count')
+        .first();
 
-    const questionCount = await knex('event_questions')
-      .where({ event_uuid: req.params.id })
-      .count('id as question_count')
-      .first();
+      questionCount = await knex('event_questions')
+        .where({ event_uuid: eventId })
+        .count('id as question_count')
+        .first();
+    } else {
+      stats = await knex('teams')
+        .where({ event_id: eventId })
+        .count('id as team_count')
+        .first();
+
+      questionCount = await knex('event_questions')
+        .where({ event_id: eventId })
+        .count('id as question_count')
+        .first();
+    }
 
     res.json({
       teams: stats.team_count || 0,
@@ -344,11 +398,25 @@ router.get('/:id/questions', requireUUID, async (req, res) => {
 // Get questions assigned to event (admin only)
 router.get('/:id/questions/admin', authenticateToken, async (req, res) => {
   try {
-    const questions = await knex('questions')
-      .join('event_questions', 'questions.id', 'event_questions.question_id')
-      .where('event_questions.event_uuid', req.params.id)
-      .select('questions.*', 'event_questions.order_index', 'event_questions.id as assignment_id')
-      .orderBy('event_questions.order_index');
+    const eventId = req.params.id;
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(eventId);
+    
+    let questions;
+    if (isUUID) {
+      // Use event_uuid for UUID events
+      questions = await knex('questions')
+        .join('event_questions', 'questions.id', 'event_questions.question_id')
+        .where('event_questions.event_uuid', eventId)
+        .select('questions.*', 'event_questions.order_index', 'event_questions.id as assignment_id')
+        .orderBy('event_questions.order_index');
+    } else {
+      // Use event_id for numeric events
+      questions = await knex('questions')
+        .join('event_questions', 'questions.id', 'event_questions.question_id')
+        .where('event_questions.event_id', eventId)
+        .select('questions.*', 'event_questions.order_index', 'event_questions.id as assignment_id')
+        .orderBy('event_questions.order_index');
+    }
     
     res.json(questions);
   } catch (error) {
@@ -361,6 +429,8 @@ router.get('/:id/questions/admin', authenticateToken, async (req, res) => {
 router.post('/:id/questions', authenticateToken, async (req, res) => {
   try {
     const { questionIds } = req.body; // Array of question IDs in desired order
+    const eventId = req.params.id;
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(eventId);
     
     if (!Array.isArray(questionIds) || questionIds.length === 0) {
       return res.status(400).json({ error: 'Question IDs array is required' });
@@ -369,26 +439,52 @@ router.post('/:id/questions', authenticateToken, async (req, res) => {
     // Start transaction
     await knex.transaction(async (trx) => {
       // Remove existing question assignments
-      await trx('event_questions')
-        .where({ event_uuid: req.params.id })
-        .del();
+      if (isUUID) {
+        await trx('event_questions')
+          .where({ event_uuid: eventId })
+          .del();
+      } else {
+        await trx('event_questions')
+          .where({ event_id: eventId })
+          .del();
+      }
 
       // Add new assignments with order
-      const assignments = questionIds.map((questionId, index) => ({
-        event_uuid: req.params.id,
-        question_id: parseInt(questionId),
-        order_index: index + 1
-      }));
+      const assignments = questionIds.map((questionId, index) => {
+        const assignment = {
+          question_id: parseInt(questionId),
+          order_index: index + 1
+        };
+        
+        if (isUUID) {
+          assignment.event_uuid = eventId;
+          assignment.event_id = null; // Set to null for UUID events
+        } else {
+          assignment.event_id = eventId;
+          assignment.event_uuid = null; // Set to null for numeric events
+        }
+        
+        return assignment;
+      });
 
       await trx('event_questions').insert(assignments);
     });
 
     // Return updated questions
-    const questions = await knex('questions')
-      .join('event_questions', 'questions.id', 'event_questions.question_id')
-      .where('event_questions.event_uuid', req.params.id)
-      .select('questions.*', 'event_questions.order_index')
-      .orderBy('event_questions.order_index');
+    let questions;
+    if (isUUID) {
+      questions = await knex('questions')
+        .join('event_questions', 'questions.id', 'event_questions.question_id')
+        .where('event_questions.event_uuid', eventId)
+        .select('questions.*', 'event_questions.order_index')
+        .orderBy('event_questions.order_index');
+    } else {
+      questions = await knex('questions')
+        .join('event_questions', 'questions.id', 'event_questions.question_id')
+        .where('event_questions.event_id', eventId)
+        .select('questions.*', 'event_questions.order_index')
+        .orderBy('event_questions.order_index');
+    }
     
     res.json(questions);
   } catch (error) {
@@ -400,12 +496,25 @@ router.post('/:id/questions', authenticateToken, async (req, res) => {
 // Remove question from event
 router.delete('/:id/questions/:questionId', authenticateToken, async (req, res) => {
   try {
-    const deleted = await knex('event_questions')
-      .where({ 
-        event_uuid: req.params.id,
-        question_id: req.params.questionId 
-      })
-      .del();
+    const eventId = req.params.id;
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(eventId);
+    
+    let deleted;
+    if (isUUID) {
+      deleted = await knex('event_questions')
+        .where({ 
+          event_uuid: eventId,
+          question_id: req.params.questionId 
+        })
+        .del();
+    } else {
+      deleted = await knex('event_questions')
+        .where({ 
+          event_id: eventId,
+          question_id: req.params.questionId 
+        })
+        .del();
+    }
 
     if (!deleted) {
       return res.status(404).json({ error: 'Question assignment not found' });

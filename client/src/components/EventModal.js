@@ -28,8 +28,8 @@ const EventModal = ({ isOpen, onClose, event = null, onSave }) => {
           name: event.name || '',
           start_time: formatDateTimeLocal(event.start_time),
           end_time: formatDateTimeLocal(event.end_time),
-          use_random_order: event.use_random_order || false,
-          team_registration_open: event.team_registration_open !== false,
+          use_random_order: Boolean(event.use_random_order),
+          team_registration_open: Boolean(event.team_registration_open),
           access_code: event.access_code || '',
           logo_url: event.logo_url || '',
           generate_ai_logo: false

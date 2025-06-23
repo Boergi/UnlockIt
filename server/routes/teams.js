@@ -254,16 +254,22 @@ router.post('/select-logo', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Team ID and logo URL are required' });
     }
 
-    // Update team with selected logo
+    // Find team by UUID or numeric ID
+    const team = await getTeamByIdOrUuid(teamId);
+    if (!team) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+
+    // Update team with selected logo - use numeric ID for database operations
     await knex('teams')
-      .where({ id: teamId })
+      .where({ id: team.id })
       .update({
         logo_url: logoUrl,
         ai_logo_generated: true,
         updated_at: knex.fn.now()
       });
 
-    const updatedTeam = await knex('teams').where({ id: teamId }).first();
+    const updatedTeam = await knex('teams').where({ id: team.id }).first();
     
     console.log('✅ Logo selected and team updated:', logoUrl);
 
@@ -336,8 +342,10 @@ router.post('/admin/create', authenticateToken, async (req, res) => {
     }
 
     const [teamId] = await knex('teams').insert({
+      uuid: require('crypto').randomUUID(),
       name,
       event_id,
+      event_uuid: event.uuid,
       logo_url: finalLogoUrl,
       ai_logo_generated: aiLogoGenerated
     });

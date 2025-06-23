@@ -229,7 +229,7 @@ const EventPage = () => {
     const loadingToast = toast.loading('Logo wird ausgewählt...');
 
     try {
-      await axios.put(`/api/teams/${selectedTeam.id}/logo`, {
+      await axios.put(`/api/teams/${selectedTeam.uuid || selectedTeam.id}/logo`, {
         logoUrl
       });
 

@@ -119,7 +119,29 @@ const EventManagement = () => {
         axios.get('/api/events'),
         axios.get('/api/questions')
       ]);
-      setEvents(eventsResponse.data);
+      
+      // Fetch stats for each event
+      const eventsWithStats = await Promise.all(
+        eventsResponse.data.map(async (event) => {
+          try {
+            const statsResponse = await axios.get(`/api/events/${event.id}/stats`);
+            return {
+              ...event,
+              teamCount: statsResponse.data.teams || 0,
+              questionCount: statsResponse.data.questions || 0
+            };
+          } catch (error) {
+            console.error('Error fetching stats for event:', event.id, error);
+            return {
+              ...event,
+              teamCount: 0,
+              questionCount: 0
+            };
+          }
+        })
+      );
+      
+      setEvents(eventsWithStats);
       setQuestions(questionsResponse.data);
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -172,7 +194,7 @@ const EventManagement = () => {
 
   const handleManageQuestions = async (event) => {
     try {
-      const response = await axios.get(`/api/events/${event.id}/questions`);
+      const response = await axios.get(`/api/events/${event.id}/questions/admin`);
       setSelectedQuestions(response.data.map(q => q.id));
       setShowQuestionSelector(event);
     } catch (error) {
@@ -329,7 +351,7 @@ const EventManagement = () => {
 
     try {
       await axios.post('/api/teams/select-logo', {
-        teamId: currentTeamForLogo.id,
+        teamId: currentTeamForLogo.uuid || currentTeamForLogo.id,
         logoUrl: logoUrl
       });
 
@@ -499,7 +521,7 @@ const EventManagement = () => {
                             </span>
                           )}
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-400">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm text-gray-400">
                           <div className="flex items-center">
                             <Calendar className="w-4 h-4 mr-1" />
                             <span>Start: {formatDateTimeDisplay(event.start_time)}</span>
@@ -511,8 +533,12 @@ const EventManagement = () => {
                             </span>
                           </div>
                           <div className="flex items-center">
+                            <Users className="w-4 h-4 mr-1" />
+                            <span>Teams: {event.teamCount || 0}</span>
+                          </div>
+                          <div className="flex items-center">
                             <HelpCircle className="w-4 h-4 mr-1" />
-                            <span>Fragen: {/* TODO: Show question count */}</span>
+                            <span>Fragen: {event.questionCount || 0}</span>
                           </div>
                         </div>
                         {event.access_code && (
