@@ -4,6 +4,7 @@ const socketIo = require('socket.io');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const compression = require('compression');
 const path = require('path');
 const { initializeSessionStore, getSessionMiddleware } = require('./config/session');
 require('dotenv').config();
@@ -53,7 +54,20 @@ const initServer = async () => {
     console.log('⚠️ Rate limiting disabled for development');
   }
 
-  // Static files with CORS headers
+  // Static files with aggressive caching and compression
+  app.use('/uploads', compression({
+    level: 6, // Good balance between compression and CPU
+    threshold: 1024, // Only compress files > 1KB
+    filter: (req, res) => {
+      // Don't compress images (they're already compressed)
+      const contentType = res.getHeader('content-type');
+      if (contentType && contentType.includes('image/')) {
+        return false;
+      }
+      return compression.filter(req, res);
+    }
+  }));
+
   app.use('/uploads', (req, res, next) => {
     // Allow requests from both localhost:3000 and localhost:3001
     const allowedOrigins = ['http://localhost:3000', 'http://localhost:3001'];
@@ -68,8 +82,40 @@ const initServer = async () => {
     res.header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
     res.header('Cross-Origin-Resource-Policy', 'cross-origin');
+    
+    // Aggressive caching for images (they never change due to unique filenames)
+    res.header('Cache-Control', 'public, max-age=31536000, immutable'); // 1 year
+    res.header('Expires', new Date(Date.now() + 31536000000).toUTCString());
+    
     next();
-  }, express.static(path.join(__dirname, 'uploads')));
+  }, express.static(path.join(__dirname, 'uploads'), {
+    maxAge: '365d', // 1 year cache
+    etag: true,
+    immutable: true,
+    index: false, // Don't serve directory listings
+    setHeaders: (res, filePath) => {
+      // Set proper MIME types for better browser handling
+      const ext = path.extname(filePath).toLowerCase();
+      switch (ext) {
+        case '.jpg':
+        case '.jpeg':
+          res.setHeader('Content-Type', 'image/jpeg');
+          break;
+        case '.png':
+          res.setHeader('Content-Type', 'image/png');
+          break;
+        case '.gif':
+          res.setHeader('Content-Type', 'image/gif');
+          break;
+        case '.webp':
+          res.setHeader('Content-Type', 'image/webp');
+          break;
+      }
+      
+      // Enable browser-level compression for non-image files
+      res.setHeader('Vary', 'Accept-Encoding');
+    }
+  }));
 
   // Broadcast scoreboard update function
   const broadcastScoreboardUpdate = async (eventId) => {
