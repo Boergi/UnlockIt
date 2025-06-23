@@ -280,24 +280,35 @@ const TeamEventPage = () => {
       setIsEventEnded(false);
     }
     
+    // Load team progress regardless of event status
+    await loadTeamProgress();
+    
     // Loading complete
     setLoading(false);
   };
 
   const loadTeamProgress = async () => {
     try {
+      console.log('🔄 Loading team progress for team:', teamId);
       const response = await axios.get(`/api/teams/${teamId}/progress`);
+      console.log('📊 Team progress response:', response.data);
       setTeamProgress(response.data);
       
       // Find current question (first not completed)
       // This now includes questions that haven't been started yet
       const currentQ = response.data.find(q => !q.completed);
+      console.log('🎯 Current question found:', currentQ);
       setCurrentQuestion(currentQ);
       
-      console.log('Team progress loaded:', response.data);
-      console.log('Current question:', currentQ);
+      console.log('✅ Team progress loaded. Total questions:', response.data.length);
+      console.log('📝 Questions summary:', response.data.map(q => ({
+        id: q.question_id,
+        title: q.question_title,
+        completed: q.completed,
+        correct: q.correct
+      })));
     } catch (error) {
-      console.error('Error loading team progress:', error);
+      console.error('❌ Error loading team progress:', error);
     }
   };
 
@@ -595,6 +606,28 @@ const TeamEventPage = () => {
         ) : (
           // Event is running
           <div className="space-y-6">
+
+
+            {/* Temporary Start Quiz Button */}
+            <div className="bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-lg p-6 border border-blue-500/30">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center space-x-2">
+                  <Target className="w-6 h-6 text-blue-400" />
+                  <h2 className="text-xl font-bold text-white">Quiz starten</h2>
+                </div>
+                <button
+                  onClick={() => navigate(`/play/${teamId}`)}
+                  className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                >
+                  <span>Quiz starten</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="bg-white/10 rounded-lg p-4">
+                <p className="text-white">Temporärer Button um das Quiz zu starten, während wir das Problem mit den Fragen beheben.</p>
+              </div>
+            </div>
+
             {/* Current Question */}
             {currentQuestion && (
               <div className="bg-gradient-to-r from-green-500/20 to-blue-500/20 rounded-lg p-6 border border-green-500/30">

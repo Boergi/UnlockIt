@@ -168,13 +168,7 @@ const GamePlay = () => {
           const elapsedSeconds = Math.floor((now - timeStarted) / 1000);
           const remainingTime = Math.max(0, questionResponse.data.time_limit_seconds - elapsedSeconds);
           
-          console.log('🕐 Time calculation:', {
-            timeStarted: timeStarted.toISOString(),
-            now: now.toISOString(),
-            elapsedSeconds,
-            timeLimit: questionResponse.data.time_limit_seconds,
-            remainingTime
-          });
+
           
           setTimeLeft(remainingTime);
           
@@ -219,13 +213,7 @@ const GamePlay = () => {
                const elapsedSeconds = Math.floor((now - timeStarted) / 1000);
                const remainingTime = Math.max(0, questionResponse.data.time_limit_seconds - elapsedSeconds);
                
-               console.log('🕐 Time calculation (existing):', {
-                 timeStarted: timeStarted.toISOString(),
-                 now: now.toISOString(),
-                 elapsedSeconds,
-                 timeLimit: questionResponse.data.time_limit_seconds,
-                 remainingTime
-               });
+
                
                setTimeLeft(remainingTime);
                

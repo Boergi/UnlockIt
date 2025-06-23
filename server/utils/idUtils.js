@@ -53,16 +53,16 @@ const getQuestionsByEventIdOrUuid = async (eventIdentifier) => {
 // Get team progress by team ID or UUID
 const getTeamProgressByIdOrUuid = async (teamIdentifier) => {
   if (isUUID(teamIdentifier)) {
-    return await knex('questions')
-      .join('event_questions', 'questions.id', 'event_questions.question_id')
+    return await knex('teams')
+      .join('event_questions', function() {
+        this.on('event_questions.event_uuid', '=', 'teams.event_uuid');
+      })
+      .join('questions', 'questions.id', 'event_questions.question_id')
       .leftJoin('team_progress', function() {
         this.on('questions.id', '=', 'team_progress.question_id')
-            .andOn('team_progress.team_uuid', '=', knex.raw('?', [teamIdentifier]));
+            .andOn('team_progress.team_uuid', '=', 'teams.uuid');
       })
-      .join('teams', function() {
-        this.on('teams.uuid', '=', knex.raw('?', [teamIdentifier]))
-            .andOn('event_questions.event_uuid', '=', 'teams.event_uuid');
-      })
+      .where('teams.uuid', teamIdentifier)
       .select(
         'questions.*',
         'event_questions.order_index',
@@ -78,16 +78,16 @@ const getTeamProgressByIdOrUuid = async (teamIdentifier) => {
       )
       .orderBy('event_questions.order_index');
   } else {
-    return await knex('questions')
-      .join('event_questions', 'questions.id', 'event_questions.question_id')
+    return await knex('teams')
+      .join('event_questions', function() {
+        this.on('event_questions.event_id', '=', 'teams.event_id');
+      })
+      .join('questions', 'questions.id', 'event_questions.question_id')
       .leftJoin('team_progress', function() {
         this.on('questions.id', '=', 'team_progress.question_id')
-            .andOn('team_progress.team_id', '=', knex.raw('?', [teamIdentifier]));
+            .andOn('team_progress.team_id', '=', 'teams.id');
       })
-      .join('teams', function() {
-        this.on('teams.id', '=', knex.raw('?', [teamIdentifier]))
-            .andOn('event_questions.event_id', '=', 'teams.event_id');
-      })
+      .where('teams.id', teamIdentifier)
       .select(
         'questions.*',
         'event_questions.order_index',
