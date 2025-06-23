@@ -30,9 +30,13 @@ export const AuthProvider = ({ children }) => {
     setLastVerification(0);
     toast.error('Session abgelaufen. Bitte loggen Sie sich erneut ein.');
     
-    // Redirect to admin login if we're on an admin page
-    if (window.location.pathname.startsWith('/admin') && window.location.pathname !== '/admin') {
-      window.location.href = '/admin';
+    // Redirect to admin login if we're on a protected admin page
+    if (window.location.pathname.startsWith('/admin') && 
+        window.location.pathname !== '/admin' && 
+        window.location.pathname !== '/admin/login' &&
+        window.location.pathname !== '/admin/setup' &&
+        !window.location.pathname.startsWith('/admin/register')) {
+      window.location.href = '/admin/login';
     }
   };
 

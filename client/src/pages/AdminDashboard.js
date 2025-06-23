@@ -161,7 +161,7 @@ const AdminDashboard = () => {
         {/* Quick Actions */}
         <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 mb-8">
           <h2 className="text-xl font-bold text-white mb-4">Schnellaktionen</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <Link
               to="/admin/events/new"
               className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg text-center transition-colors"
@@ -179,6 +179,12 @@ const AdminDashboard = () => {
               className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg text-center transition-colors"
             >
               🎮 Live Moderation
+            </Link>
+            <Link
+              to="/admin/invitations"
+              className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-lg text-center transition-colors"
+            >
+              👥 Admin-Einladungen
             </Link>
           </div>
         </div>

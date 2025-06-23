@@ -1,26 +1,43 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import axios from 'axios';
 import toast from 'react-hot-toast';
 import { Lock, Mail, Eye, EyeOff, Shield } from 'lucide-react';
 
 const AdminLogin = () => {
   const navigate = useNavigate();
-  const { login, register, loading, isAuthenticated, user } = useAuth();
+  const { login, loading, isAuthenticated, user } = useAuth();
   
-  const [isLoginMode, setIsLoginMode] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [needsSetup, setNeedsSetup] = useState(null);
 
-  // Redirect if already authenticated
+  // Check setup status and redirect if already authenticated
   useEffect(() => {
+    checkSetupStatus();
+    
     if (!loading && isAuthenticated && user) {
       console.log('🔄 Already authenticated, redirecting to dashboard');
       navigate('/admin/dashboard');
     }
   }, [loading, isAuthenticated, user, navigate]);
+
+  const checkSetupStatus = async () => {
+    try {
+      const response = await axios.get('/api/auth/setup-status');
+      setNeedsSetup(response.data.needsSetup);
+      
+      if (response.data.needsSetup) {
+        // No users exist, redirect to setup
+        navigate('/admin/setup');
+      }
+    } catch (error) {
+      console.error('Error checking setup status:', error);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -33,12 +50,10 @@ const AdminLogin = () => {
     setSubmitting(true);
 
     try {
-      const result = isLoginMode 
-        ? await login(email, password)
-        : await register(email, password);
+      const result = await login(email, password);
 
       if (result.success) {
-        toast.success(isLoginMode ? 'Erfolgreich angemeldet!' : 'Account erstellt!');
+        toast.success('Erfolgreich angemeldet!');
         navigate('/admin/dashboard');
       } else {
         toast.error(result.error);
@@ -50,9 +65,9 @@ const AdminLogin = () => {
     }
   };
 
-  if (loading) {
+  if (loading || needsSetup === null) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 flex items-center justify-center">
         <div className="text-center">
           <Shield className="w-16 h-16 text-purple-400 mx-auto mb-4 animate-pulse" />
           <p className="text-white text-xl">Lade...</p>
@@ -62,21 +77,21 @@ const AdminLogin = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 flex items-center justify-center p-4">
       <div className="max-w-md w-full">
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center mb-4">
             <Shield className="w-12 h-12 text-purple-400 mr-3" />
-            <h1 className="text-3xl font-bold text-white">Admin-Bereich</h1>
+            <h1 className="text-3xl font-bold text-white">Admin-Anmeldung</h1>
           </div>
           <p className="text-gray-300">
-            {isLoginMode ? 'Melde dich an, um Events zu verwalten' : 'Erstelle einen Admin-Account'}
+            Melde dich an, um Events zu verwalten
           </p>
         </div>
 
-        {/* Login/Register Form */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6">
+        {/* Login Form */}
+        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -87,7 +102,7 @@ const AdminLogin = () => {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-3 py-3 bg-white/20 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                className="w-full px-3 py-3 bg-white/20 border border-white/30 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="admin@example.com"
                 disabled={submitting}
               />
@@ -103,7 +118,7 @@ const AdminLogin = () => {
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-3 py-3 bg-white/20 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 pr-10"
+                  className="w-full px-3 py-3 bg-white/20 border border-white/30 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10"
                   placeholder="Sicheres Passwort"
                   disabled={submitting}
                 />
@@ -120,34 +135,21 @@ const AdminLogin = () => {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full flex items-center justify-center px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-medium rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full flex items-center justify-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {submitting ? (
                 <>
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                  {isLoginMode ? 'Anmelden...' : 'Registrieren...'}
+                  Anmelden...
                 </>
               ) : (
                 <>
                   <Shield className="w-5 h-5 mr-2" />
-                  {isLoginMode ? 'Anmelden' : 'Account erstellen'}
+                  Anmelden
                 </>
               )}
             </button>
           </form>
-
-          {/* Toggle Mode */}
-          <div className="mt-6 pt-6 border-t border-gray-600 text-center">
-            <p className="text-gray-400">
-              {isLoginMode ? 'Noch kein Account?' : 'Bereits registriert?'}
-            </p>
-            <button
-              onClick={() => setIsLoginMode(!isLoginMode)}
-              className="mt-2 text-purple-400 hover:text-purple-300 transition-colors duration-200"
-            >
-              {isLoginMode ? 'Account erstellen' : 'Zur Anmeldung'}
-            </button>
-          </div>
         </div>
 
         {/* Back to Home */}
@@ -160,11 +162,11 @@ const AdminLogin = () => {
           </button>
         </div>
 
-        {/* Development Note */}
-        <div className="mt-8 p-4 bg-orange-500/10 border border-orange-500/30 rounded-lg">
-          <p className="text-orange-300 text-sm text-center">
-            <strong>Entwicklungshinweis:</strong> In der Produktion sollte die Registrierung 
-            deaktiviert oder durch Einladungen geschützt werden.
+        {/* Info Note */}
+        <div className="mt-8 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+          <p className="text-blue-300 text-sm text-center">
+            <strong>Neue Admins:</strong> Neue Admin-Accounts können nur über Einladungslinks 
+            von bestehenden Admins erstellt werden.
           </p>
         </div>
       </div>

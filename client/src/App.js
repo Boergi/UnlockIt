@@ -12,7 +12,11 @@ import TeamRegistration from './pages/TeamRegistration';
 import GamePlay from './pages/GamePlay';
 import Scoreboard from './pages/Scoreboard';
 import AdminLogin from './pages/AdminLogin';
+import AdminSetup from './pages/AdminSetup';
+import AdminRegister from './pages/AdminRegister';
+import AdminRedirect from './components/AdminRedirect';
 import AdminDashboard from './pages/AdminDashboard';
+import AdminInvitations from './pages/AdminInvitations';
 import EventManagement from './pages/EventManagement';
 import QuestionManagement from './pages/QuestionManagement';
 import LiveModeration from './pages/LiveModeration';
@@ -34,10 +38,18 @@ function App() {
               <Route path="/scoreboard/:eventId" element={<Scoreboard />} />
               
               {/* Admin Routes */}
-              <Route path="/admin" element={<AdminLogin />} />
+              <Route path="/admin/login" element={<AdminLogin />} />
+              <Route path="/admin/setup" element={<AdminSetup />} />
+              <Route path="/admin/register" element={<AdminRegister />} />
+              <Route path="/admin" element={<AdminRedirect />} />
               <Route path="/admin/dashboard" element={
                 <ProtectedRoute>
                   <AdminDashboard />
+                </ProtectedRoute>
+              } />
+              <Route path="/admin/invitations" element={
+                <ProtectedRoute>
+                  <AdminInvitations />
                 </ProtectedRoute>
               } />
               <Route path="/admin/events" element={

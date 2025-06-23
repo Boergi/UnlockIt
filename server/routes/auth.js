@@ -1,6 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const router = express.Router();
 
 const knex = require('knex')(require('../knexfile')[process.env.NODE_ENV || 'development']);
@@ -89,8 +90,21 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// Register (for development)
-router.post('/register', async (req, res) => {
+// Check if initial setup is needed
+router.get('/setup-status', async (req, res) => {
+  try {
+    const userCount = await knex('users').count('id as count').first();
+    const needsSetup = userCount.count === 0;
+    
+    res.json({ needsSetup });
+  } catch (error) {
+    console.error('Setup status error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Initial admin registration (only if no users exist)
+router.post('/setup', async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -98,9 +112,10 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    const existingUser = await knex('users').where({ email }).first();
-    if (existingUser) {
-      return res.status(409).json({ error: 'User already exists' });
+    // Check if any users already exist
+    const userCount = await knex('users').count('id as count').first();
+    if (userCount.count > 0) {
+      return res.status(403).json({ error: 'Initial setup already completed. Use invitation links to add new admins.' });
     }
 
     const saltRounds = 12;
@@ -125,7 +140,169 @@ router.post('/register', async (req, res) => {
 
     res.status(201).json({ token, user: { id: userId, email } });
   } catch (error) {
-    console.error('Registration error:', error);
+    console.error('Initial setup error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Create invitation link (requires authentication)
+router.post('/create-invitation', authenticateToken, async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    // Check if user already exists
+    const existingUser = await knex('users').where({ email }).first();
+    if (existingUser) {
+      return res.status(409).json({ error: 'User already exists' });
+    }
+
+    // Check if there's already a pending invitation for this email
+    const existingInvitation = await knex('admin_invitations')
+      .where({ email, used: false })
+      .where('expires_at', '>', new Date())
+      .first();
+
+    if (existingInvitation) {
+      return res.status(409).json({ error: 'Invitation already sent for this email' });
+    }
+
+    // Generate unique token
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+    await knex('admin_invitations').insert({
+      token,
+      email,
+      created_by: req.user.userId,
+      expires_at: expiresAt
+    });
+
+    const invitationLink = `${process.env.FRONTEND_URL || 'http://localhost:3001'}/admin/register?token=${token}`;
+
+    res.status(201).json({ 
+      message: 'Invitation created successfully',
+      invitationLink,
+      expiresAt
+    });
+  } catch (error) {
+    console.error('Create invitation error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Validate invitation token
+router.get('/validate-invitation/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    const invitation = await knex('admin_invitations')
+      .where({ token, used: false })
+      .where('expires_at', '>', new Date())
+      .first();
+
+    if (!invitation) {
+      return res.status(404).json({ error: 'Invalid or expired invitation' });
+    }
+
+    res.json({ 
+      valid: true,
+      email: invitation.email
+    });
+  } catch (error) {
+    console.error('Validate invitation error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Register with invitation token
+router.post('/register-with-invitation', async (req, res) => {
+  try {
+    const { token, password } = req.body;
+
+    if (!token || !password) {
+      return res.status(400).json({ error: 'Token and password are required' });
+    }
+
+    // Validate invitation
+    const invitation = await knex('admin_invitations')
+      .where({ token, used: false })
+      .where('expires_at', '>', new Date())
+      .first();
+
+    if (!invitation) {
+      return res.status(404).json({ error: 'Invalid or expired invitation' });
+    }
+
+    // Check if user already exists
+    const existingUser = await knex('users').where({ email: invitation.email }).first();
+    if (existingUser) {
+      return res.status(409).json({ error: 'User already exists' });
+    }
+
+    const saltRounds = 12;
+    const password_hash = await bcrypt.hash(password, saltRounds);
+
+    // Create user and mark invitation as used
+    const trx = await knex.transaction();
+    try {
+      const [userId] = await trx('users').insert({
+        email: invitation.email,
+        password_hash
+      });
+
+      await trx('admin_invitations')
+        .where({ id: invitation.id })
+        .update({ 
+          used: true, 
+          used_at: new Date() 
+        });
+
+      await trx.commit();
+
+      const jwtToken = jwt.sign(
+        { userId, email: invitation.email },
+        process.env.JWT_SECRET,
+        { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+      );
+
+      // Store user in session as well
+      req.session.user = {
+        id: userId,
+        email: invitation.email
+      };
+
+      res.status(201).json({ 
+        token: jwtToken, 
+        user: { id: userId, email: invitation.email } 
+      });
+    } catch (error) {
+      await trx.rollback();
+      throw error;
+    }
+  } catch (error) {
+    console.error('Register with invitation error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get all invitations (requires authentication)
+router.get('/invitations', authenticateToken, async (req, res) => {
+  try {
+    const invitations = await knex('admin_invitations')
+      .leftJoin('users', 'admin_invitations.created_by', 'users.id')
+      .select(
+        'admin_invitations.*',
+        'users.email as created_by_email'
+      )
+      .orderBy('admin_invitations.created_at', 'desc');
+
+    res.json(invitations);
+  } catch (error) {
+    console.error('Get invitations error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
