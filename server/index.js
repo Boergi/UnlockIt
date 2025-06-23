@@ -279,8 +279,41 @@ const initServer = async () => {
   if (process.env.NODE_ENV === 'production') {
     console.log('🚀 Serving React build files for production');
     
-    // Serve static files from the React build folder
-    app.use(express.static(path.join(__dirname, '../client/build')));
+    // Check if build directory exists
+    const buildPath = path.join(__dirname, '../client/build');
+    const indexPath = path.join(buildPath, 'index.html');
+    
+    if (!require('fs').existsSync(buildPath)) {
+      console.error('❌ Build directory not found! Run "npm run build" first.');
+      process.exit(1);
+    }
+    
+    if (!require('fs').existsSync(indexPath)) {
+      console.error('❌ index.html not found in build directory!');
+      process.exit(1);
+    }
+    
+    console.log('✅ React build files found and ready to serve');
+    
+    // Serve static files from the React build folder with proper headers
+    app.use(express.static(path.join(__dirname, '../client/build'), {
+      maxAge: '1y',
+      etag: false,
+      setHeaders: (res, path) => {
+        // Set proper MIME types for different file types
+        if (path.endsWith('.css')) {
+          res.setHeader('Content-Type', 'text/css');
+        } else if (path.endsWith('.js')) {
+          res.setHeader('Content-Type', 'application/javascript');
+        } else if (path.endsWith('.html')) {
+          res.setHeader('Content-Type', 'text/html');
+        }
+        
+        // Add CORS headers for static files
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      }
+    }));
     
     // Handle React routing - send all non-API requests to React app
     app.get('*', (req, res) => {
@@ -289,6 +322,9 @@ const initServer = async () => {
         return res.status(404).json({ error: 'API route not found' });
       }
       
+      // Set proper headers for the HTML file
+      res.setHeader('Content-Type', 'text/html');
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.sendFile(path.join(__dirname, '../client/build', 'index.html'));
     });
   } else {
