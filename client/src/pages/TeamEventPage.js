@@ -439,11 +439,11 @@ const TeamEventPage = () => {
 
             {/* Questions Overview */}
             <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-gray-600">
-              <h2 className="text-xl font-bold text-white mb-4">Fragen Übersicht</h2>
+              <h2 className="text-xl font-bold text-white mb-4">Beantwortete Fragen</h2>
               
-              {teamProgress.length > 0 ? (
+              {teamProgress.filter(progress => progress.attempt_1 !== null || progress.attempt_2 !== null || progress.attempt_3 !== null).length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {teamProgress.map((progress, index) => {
+                  {teamProgress.filter(progress => progress.attempt_1 !== null || progress.attempt_2 !== null || progress.attempt_3 !== null).map((progress, index) => {
                     const isCorrect = progress?.correct || false;
                     const isCompleted = progress?.completed || false;
                     const attempts = progress ? [progress.attempt_1, progress.attempt_2, progress.attempt_3].filter(Boolean).length : 0;
@@ -477,7 +477,7 @@ const TeamEventPage = () => {
                       >
                         <div className="flex items-center justify-between mb-2">
                           <h3 className="font-semibold text-white">
-                            {index + 1}. {progress.question_title}
+                            {progress.question_title}
                           </h3>
                           {isCorrect ? (
                             <CheckCircle className="w-5 h-5 text-green-400" />
@@ -510,7 +510,7 @@ const TeamEventPage = () => {
                   })}
                 </div>
               ) : (
-                <p className="text-gray-300">Lade Fragen...</p>
+                <p className="text-gray-300">Noch keine Fragen beantwortet</p>
               )}
             </div>
 
