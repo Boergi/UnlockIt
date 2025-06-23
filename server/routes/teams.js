@@ -5,7 +5,8 @@ const path = require('path');
 const fs = require('fs').promises;
 const axios = require('axios');
 const router = express.Router();
-const { getTeamByIdOrUuid, getEventByIdOrUuid, getTeamsByEventIdOrUuid, getTeamProgressByIdOrUuid } = require('../utils/idUtils');
+const { getTeamByIdOrUuid, getEventByIdOrUuid, getTeamsByEventIdOrUuid, getTeamProgressByIdOrUuid, isUUID } = require('../utils/idUtils');
+const { v4: uuidv4 } = require('uuid');
 
 const knex = require('knex')(require('../knexfile')[process.env.NODE_ENV || 'development']);
 
@@ -27,6 +28,15 @@ const ensureDirectories = async () => {
 };
 
 ensureDirectories();
+
+// Middleware to validate UUID for public routes
+const requireUUID = (req, res, next) => {
+  const id = req.params.teamId || req.params.id;
+  if (!isUUID(id)) {
+    return res.status(400).json({ error: 'Only UUID access is allowed for security reasons' });
+  }
+  next();
+};
 
 // Helper function to delete logo files for a team
 const deleteTeamLogoFiles = async (team, event) => {
@@ -394,7 +404,7 @@ router.post('/register', async (req, res) => {
 });
 
 // Get team details
-router.get('/:id', async (req, res) => {
+router.get('/:id', requireUUID, async (req, res) => {
   try {
     const team = await getTeamByIdOrUuid(req.params.id);
     
@@ -544,7 +554,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 });
 
 // Set team logo (for logo selection after generation)
-router.put('/:id/logo', async (req, res) => {
+router.put('/:id/logo', requireUUID, async (req, res) => {
   try {
     const { logoUrl } = req.body;
     
@@ -552,21 +562,21 @@ router.put('/:id/logo', async (req, res) => {
       return res.status(400).json({ error: 'Logo URL is required' });
     }
 
-    const team = await knex('teams').where({ id: req.params.id }).first();
+    const team = await getTeamByIdOrUuid(req.params.id);
     if (!team) {
       return res.status(404).json({ error: 'Team not found' });
     }
 
-    // Update team with selected logo
+    // Update team with selected logo - use numeric ID for database operations
     await knex('teams')
-      .where({ id: req.params.id })
+      .where({ id: team.id })
       .update({
         logo_url: logoUrl,
         ai_logo_generated: true,
         updated_at: knex.fn.now()
       });
 
-    const updatedTeam = await knex('teams').where({ id: req.params.id }).first();
+    const updatedTeam = await knex('teams').where({ id: team.id }).first();
     
     console.log(`✅ Logo selected for team "${team.name}": ${logoUrl}`);
     res.json(updatedTeam);
@@ -577,7 +587,7 @@ router.put('/:id/logo', async (req, res) => {
 });
 
 // Get team progress
-router.get('/:id/progress', async (req, res) => {
+router.get('/:id/progress', requireUUID, async (req, res) => {
   try {
     const progress = await getTeamProgressByIdOrUuid(req.params.id);
     

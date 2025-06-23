@@ -430,7 +430,7 @@ const TeamEventPage = () => {
                 </div>
               </div>
             ) : (
-              <p className="text-gray-300">Noch keine Fragen verfügbar</p>
+              <p className="text-gray-300">Noch keine Fragen bearbeitet</p>
             )}
           </div>
         </div>
@@ -499,11 +499,11 @@ const TeamEventPage = () => {
 
             {/* Questions Overview */}
             <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-gray-600">
-              <h2 className="text-xl font-bold text-white mb-4">Beantwortete Fragen</h2>
+              <h2 className="text-xl font-bold text-white mb-4">Bearbeitete Fragen</h2>
               
-              {teamProgress.filter(progress => progress.attempt_1 !== null || progress.attempt_2 !== null || progress.attempt_3 !== null).length > 0 ? (
+              {teamProgress.filter(progress => progress.completed || progress.attempt_1 !== null || progress.attempt_2 !== null || progress.attempt_3 !== null).length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {teamProgress.filter(progress => progress.attempt_1 !== null || progress.attempt_2 !== null || progress.attempt_3 !== null).map((progress, index) => {
+                  {teamProgress.filter(progress => progress.completed || progress.attempt_1 !== null || progress.attempt_2 !== null || progress.attempt_3 !== null).map((progress, index) => {
                     const isCorrect = progress?.correct || false;
                     const isCompleted = progress?.completed || false;
                     const attempts = progress ? [progress.attempt_1, progress.attempt_2, progress.attempt_3].filter(Boolean).length : 0;
@@ -570,7 +570,7 @@ const TeamEventPage = () => {
                   })}
                 </div>
               ) : (
-                <p className="text-gray-300">Noch keine Fragen beantwortet</p>
+                <p className="text-gray-300">Noch keine Fragen bearbeitet</p>
               )}
             </div>
 

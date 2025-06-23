@@ -74,9 +74,18 @@ const initServer = async () => {
   // Broadcast scoreboard update function
   const broadcastScoreboardUpdate = async (eventId) => {
     try {
+      // Validate that eventId is a UUID for security
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(eventId);
+      
+      if (!isUUID) {
+        console.log(`🚫 broadcastScoreboardUpdate called with non-UUID eventId: ${eventId}`);
+        return;
+      }
+      
+      // For UUID events, use event_uuid in teams table
       const scoreboard = await knex('teams')
         .leftJoin('team_progress', 'teams.id', 'team_progress.team_id')
-        .where('teams.event_id', eventId)
+        .where('teams.event_uuid', eventId)
         .groupBy('teams.id', 'teams.name', 'teams.logo_url')
         .select(
           'teams.id',
@@ -130,6 +139,15 @@ const initServer = async () => {
     console.log('New client connected:', socket.id);
 
     socket.on('join-event', (eventId) => {
+      // Validate that eventId is a UUID for security
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(eventId);
+      
+      if (!isUUID) {
+        console.log(`🚫 Socket ${socket.id} attempted to join event with non-UUID: ${eventId}`);
+        socket.emit('error', { message: 'Only UUID access is allowed for security reasons' });
+        return;
+      }
+      
       socket.join(`event-${eventId}`);
       
       // Check how many clients are now in the room
@@ -140,10 +158,28 @@ const initServer = async () => {
     });
 
     socket.on('team-joined', (data) => {
+      // Validate that eventId is a UUID for security
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(data.eventId);
+      
+      if (!isUUID) {
+        console.log(`🚫 Socket ${socket.id} attempted team-joined with non-UUID eventId: ${data.eventId}`);
+        socket.emit('error', { message: 'Only UUID access is allowed for security reasons' });
+        return;
+      }
+      
       socket.to(`event-${data.eventId}`).emit('team-update', data);
     });
 
     socket.on('answer-submitted', (data) => {
+      // Validate that eventId is a UUID for security
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(data.eventId);
+      
+      if (!isUUID) {
+        console.log(`🚫 Socket ${socket.id} attempted answer-submitted with non-UUID eventId: ${data.eventId}`);
+        socket.emit('error', { message: 'Only UUID access is allowed for security reasons' });
+        return;
+      }
+      
       socket.to(`event-${data.eventId}`).emit('scoreboard-update', data);
     });
 
@@ -166,13 +202,23 @@ const initServer = async () => {
 
           case 'event-stats':
             if (params.eventId) {
+              // Validate that eventId is a UUID for security
+              const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(params.eventId);
+              
+              if (!isUUID) {
+                console.log(`🚫 Socket ${socket.id} attempted event-stats with non-UUID eventId: ${params.eventId}`);
+                socket.emit('error', { message: 'Only UUID access is allowed for security reasons' });
+                return;
+              }
+              
               const [teams, totalQuestions] = await Promise.all([
-                knex('teams').where({ event_id: params.eventId }).count('* as count').first(),
+                knex('teams').where({ event_uuid: params.eventId }).count('* as count').first(),
                 knex('questions')
                   .join('event_questions', 'questions.id', 'event_questions.question_id')
-                  .where({ 'event_questions.event_id': params.eventId })
+                  .where({ 'event_questions.event_uuid': params.eventId })
                   .count('* as count').first()
               ]);
+              
               result = { 
                 type: 'event-stats', 
                 data: { 
@@ -186,9 +232,18 @@ const initServer = async () => {
 
           case 'scoreboard':
             if (params.eventId) {
+              // Validate that eventId is a UUID for security
+              const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(params.eventId);
+              
+              if (!isUUID) {
+                console.log(`🚫 Socket ${socket.id} attempted scoreboard with non-UUID eventId: ${params.eventId}`);
+                socket.emit('error', { message: 'Only UUID access is allowed for security reasons' });
+                return;
+              }
+              
               const scoreboard = await knex('teams')
                 .leftJoin('team_progress', 'teams.id', 'team_progress.team_id')
-                .where('teams.event_id', params.eventId)
+                .where('teams.event_uuid', params.eventId)
                 .groupBy('teams.id', 'teams.name', 'teams.logo_url')
                 .select(
                   'teams.id',
@@ -200,6 +255,7 @@ const initServer = async () => {
                 )
                 .orderBy('total_points', 'desc')
                 .orderBy('questions_solved', 'desc');
+              
               result = { type: 'scoreboard', data: scoreboard, eventId: params.eventId };
             }
             break;

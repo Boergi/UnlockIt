@@ -35,10 +35,29 @@ const Scoreboard = () => {
     const cleanup = onLiveDataUpdate((data) => {
       console.log('📊 Socket.IO data received:', data);
       console.log('📊 Data type:', data.type, 'Expected: scoreboard');
-      console.log('📊 Data eventId:', data.eventId, 'Expected:', parseInt(eventId));
-      console.log('📊 EventId comparison:', data.eventId === parseInt(eventId));
+      console.log('📊 Data eventId:', data.eventId, 'Current eventId:', eventId);
       
-      if (data.type === 'scoreboard' && data.eventId === parseInt(eventId)) {
+      // Handle both UUID and numeric event IDs
+      const dataEventId = data.eventId;
+      const currentEventId = eventId;
+      const numericEventId = parseInt(eventId);
+      
+      const eventMatches = 
+        dataEventId === currentEventId ||  // Direct match (UUID or numeric)
+        dataEventId === numericEventId ||  // Numeric match
+        (event?.id && dataEventId === event.id) ||  // Match with loaded event's numeric ID
+        (event?.uuid && dataEventId === event.uuid);  // Match with loaded event's UUID
+      
+      console.log('📊 Event matching:', {
+        dataEventId,
+        currentEventId,
+        numericEventId,
+        eventId_from_loaded: event?.id,
+        eventUuid_from_loaded: event?.uuid,
+        eventMatches
+      });
+      
+      if (data.type === 'scoreboard' && eventMatches) {
         console.log('✅ Updating scoreboard with new data:', data.data);
         setScoreboard(data.data);
       } else {
@@ -67,15 +86,24 @@ const Scoreboard = () => {
       cleanup && cleanup();
       clearInterval(interval);
     };
-  }, [connected, eventId]);
+  }, [connected, eventId, event]);
 
   const loadCurrentTeam = () => {
     try {
       const teamData = localStorage.getItem('currentTeam');
       if (teamData) {
         const team = JSON.parse(teamData);
-        // Only set current team if it matches the current event
-        if (team.eventId === parseInt(eventId)) {
+        // Handle both UUID and numeric event IDs for team validation
+        const teamEventId = team.eventId;
+        const currentEventId = eventId;
+        const numericEventId = parseInt(eventId);
+        
+        const teamBelongsToEvent = 
+          teamEventId === currentEventId ||
+          teamEventId === numericEventId ||
+          teamEventId === parseInt(currentEventId);
+        
+        if (teamBelongsToEvent) {
           setCurrentTeam(team);
         }
       }
@@ -96,10 +124,15 @@ const Scoreboard = () => {
 
   const loadEventAndScoreboard = async () => {
     try {
+      console.log('🔄 Loading event and scoreboard for eventId:', eventId);
+      
       const [eventResponse, scoreboardResponse] = await Promise.all([
         axios.get(`/api/events/${eventId}`),
         axios.get(`/api/game/event/${eventId}/scoreboard`)
       ]);
+      
+      console.log('📋 Event data loaded:', eventResponse.data);
+      console.log('📋 Scoreboard data loaded:', scoreboardResponse.data);
       
       setEvent(eventResponse.data);
       setScoreboard(scoreboardResponse.data);

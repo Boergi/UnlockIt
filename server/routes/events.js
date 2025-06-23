@@ -5,7 +5,7 @@ const axios = require('axios');
 const fs = require('fs').promises;
 const path = require('path');
 const { formatDateForMySQL } = require('../utils/dateUtils');
-const { getEventByIdOrUuid, getTeamsByEventIdOrUuid, getQuestionsByEventIdOrUuid } = require('../utils/idUtils');
+const { getEventByIdOrUuid, getTeamsByEventIdOrUuid, getQuestionsByEventIdOrUuid, isUUID } = require('../utils/idUtils');
 
 const knex = require('knex')(require('../knexfile')[process.env.NODE_ENV || 'development']);
 
@@ -32,6 +32,15 @@ const ensureDirectories = async () => {
 };
 
 ensureDirectories();
+
+// Middleware to validate UUID for public routes
+const requireUUID = (req, res, next) => {
+  const id = req.params.eventId || req.params.id;
+  if (!isUUID(id)) {
+    return res.status(400).json({ error: 'Only UUID access is allowed for security reasons' });
+  }
+  next();
+};
 
 // Get all events
 router.get('/', authenticateToken, async (req, res) => {
@@ -79,7 +88,7 @@ router.get('/ai-config', (req, res) => {
 });
 
 // Get single event
-router.get('/:id', async (req, res) => {
+router.get('/:id', requireUUID, async (req, res) => {
   try {
     const event = await getEventByIdOrUuid(req.params.id);
     
@@ -321,7 +330,7 @@ router.get('/:id/stats', authenticateToken, async (req, res) => {
 });
 
 // Get questions assigned to event (public for teams)
-router.get('/:id/questions', async (req, res) => {
+router.get('/:id/questions', requireUUID, async (req, res) => {
   try {
     const questions = await getQuestionsByEventIdOrUuid(req.params.id);
     

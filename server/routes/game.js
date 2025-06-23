@@ -1,41 +1,91 @@
 const express = require('express');
 const ExcelJS = require('exceljs');
 const { authenticateToken } = require('./auth');
+const { getEventByIdOrUuid, getTeamsByEventIdOrUuid, getTeamByIdOrUuid, isUUID } = require('../utils/idUtils');
 
 const knex = require('knex')(require('../knexfile')[process.env.NODE_ENV || 'development']);
 
 module.exports = (io, broadcastScoreboardUpdate) => {
   const router = express.Router();
 
+// Middleware to validate UUID for team routes
+const requireTeamUUID = (req, res, next) => {
+  const teamId = req.params.teamId;
+  if (!isUUID(teamId)) {
+    return res.status(400).json({ error: 'Only UUID access is allowed for security reasons' });
+  }
+  next();
+};
+
+// Middleware to validate UUID for event routes  
+const requireEventUUID = (req, res, next) => {
+  const eventId = req.params.eventId;
+  if (!isUUID(eventId)) {
+    return res.status(400).json({ error: 'Only UUID access is allowed for security reasons' });
+  }
+  next();
+};
+
 // Get current question for team
-router.get('/team/:teamId/current-question', async (req, res) => {
+router.get('/team/:teamId/current-question', requireTeamUUID, async (req, res) => {
   try {
-    const team = await knex('teams').where({ id: req.params.teamId }).first();
+    console.log('🔍 Looking up team with ID/UUID:', req.params.teamId);
+    
+    const team = await getTeamByIdOrUuid(req.params.teamId);
     if (!team) {
+      console.log('❌ Team not found:', req.params.teamId);
       return res.status(404).json({ error: 'Team not found' });
     }
 
-    // Check if event has started
-    const event = await knex('events').where({ id: team.event_id }).first();
+    console.log('✅ Team found:', { id: team.id, uuid: team.uuid, name: team.name });
+
+    // Check if event has started - handle both event_id and event_uuid
+    let event;
+    if (team.event_uuid) {
+      event = await knex('events').where({ uuid: team.event_uuid }).first();
+    } else if (team.event_id) {
+      event = await knex('events').where({ id: team.event_id }).first();
+    }
+    
+    if (!event) {
+      console.log('❌ Event not found for team:', team);
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    console.log('✅ Event found:', { id: event.id, uuid: event.uuid, name: event.name });
+
     const now = new Date();
     if (new Date(event.start_time) > now) {
       return res.status(403).json({ error: 'Event has not started yet' });
     }
 
-    // Get all questions for the event
-    let questions = await knex('questions')
-      .join('event_questions', 'questions.id', 'event_questions.question_id')
-      .where('event_questions.event_id', team.event_id)
-      .select('questions.*', 'event_questions.order_index')
-      .orderBy(event.use_random_order ? knex.raw('RAND()') : 'event_questions.order_index');
+    // Get all questions for the event - handle both event_id and event_uuid
+    let questions;
+    if (event.uuid) {
+      questions = await knex('questions')
+        .join('event_questions', 'questions.id', 'event_questions.question_id')
+        .where('event_questions.event_uuid', event.uuid)
+        .select('questions.*', 'event_questions.order_index')
+        .orderBy(event.use_random_order ? knex.raw('RAND()') : 'event_questions.order_index');
+    } else {
+      questions = await knex('questions')
+        .join('event_questions', 'questions.id', 'event_questions.question_id')
+        .where('event_questions.event_id', event.id)
+        .select('questions.*', 'event_questions.order_index')
+        .orderBy(event.use_random_order ? knex.raw('RAND()') : 'event_questions.order_index');
+    }
 
     if (questions.length === 0) {
       return res.status(404).json({ error: 'No questions found for this event' });
     }
 
-    // Get team's progress including incomplete questions
+    console.log(`📋 Found ${questions.length} questions for event`);
+
+    // Get team's progress including incomplete questions - use team's numeric ID for progress
     const allProgress = await knex('team_progress')
-      .where({ team_id: req.params.teamId });
+      .where({ team_id: team.id });
+
+    console.log(`📊 Found ${allProgress.length} progress entries for team`);
 
     const completedQuestionIds = allProgress
       .filter(p => p.correct || p.completed)
@@ -52,6 +102,7 @@ router.get('/team/:teamId/current-question', async (req, res) => {
         const attemptsUsed = [incompleteProgress.attempt_1, incompleteProgress.attempt_2, incompleteProgress.attempt_3]
           .filter(Boolean).length;
         
+        console.log('🔄 Returning incomplete question:', questionData.id);
         return res.json({
           ...questionData,
           progress: {
@@ -67,6 +118,7 @@ router.get('/team/:teamId/current-question', async (req, res) => {
     const nextQuestion = questions.find(q => !completedQuestionIds.includes(q.id));
     
     if (!nextQuestion) {
+      console.log('🎉 All questions completed for team');
       return res.json({ completed: true, message: 'All questions completed!' });
     }
 
@@ -81,6 +133,7 @@ router.get('/team/:teamId/current-question', async (req, res) => {
       const attemptsUsed = [existingProgress.attempt_1, existingProgress.attempt_2, existingProgress.attempt_3]
         .filter(Boolean).length;
       
+      console.log('📋 Returning existing question with progress:', questionData.id);
       res.json({
         ...questionData,
         progress: {
@@ -91,6 +144,7 @@ router.get('/team/:teamId/current-question', async (req, res) => {
       });
     } else {
       // Fresh question - no progress yet
+      console.log('🆕 Returning fresh question:', questionData.id);
       res.json(questionData);
     }
   } catch (error) {
@@ -108,6 +162,11 @@ router.post('/question/:questionId/start', async (req, res) => {
       return res.status(400).json({ error: 'Team ID is required' });
     }
 
+    // Validate that teamId is a UUID
+    if (!isUUID(teamId)) {
+      return res.status(400).json({ error: 'Only UUID access is allowed for security reasons' });
+    }
+
     const question = await knex('questions').where({ id: req.params.questionId }).first();
     if (!question) {
       return res.status(404).json({ error: 'Question not found' });
@@ -115,9 +174,15 @@ router.post('/question/:questionId/start', async (req, res) => {
 
     console.log(`🔍 Checking progress for team ${teamId}, question ${req.params.questionId}`);
 
-    // Check if progress already exists
+    // Get team to get numeric ID for progress table
+    const team = await getTeamByIdOrUuid(teamId);
+    if (!team) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+
+    // Check if progress already exists - use team's numeric ID
     let progress = await knex('team_progress')
-      .where({ team_id: teamId, question_id: req.params.questionId })
+      .where({ team_id: team.id, question_id: req.params.questionId })
       .first();
 
     console.log('📊 Existing progress:', progress);
@@ -126,7 +191,8 @@ router.post('/question/:questionId/start', async (req, res) => {
       console.log('➕ Creating new progress entry...');
       try {
         const [progressId] = await knex('team_progress').insert({
-          team_id: teamId,
+          team_id: team.id,
+          team_uuid: team.uuid,
           question_id: req.params.questionId,
           time_started: new Date()
         });
@@ -143,7 +209,7 @@ router.post('/question/:questionId/start', async (req, res) => {
         console.log('❌ Insert failed, checking if entry was created by another request...');
         // Maybe another request created it in the meantime
         progress = await knex('team_progress')
-          .where({ team_id: teamId, question_id: req.params.questionId })
+          .where({ team_id: team.id, question_id: req.params.questionId })
           .first();
         
         if (progress) {
@@ -175,7 +241,7 @@ router.post('/question/:questionId/start', async (req, res) => {
 });
 
 // Get already used tips for a question
-router.get('/question/:questionId/tips/:teamId', async (req, res) => {
+router.get('/question/:questionId/tips/:teamId', requireTeamUUID, async (req, res) => {
   try {
     const { questionId, teamId } = req.params;
 
@@ -184,8 +250,14 @@ router.get('/question/:questionId/tips/:teamId', async (req, res) => {
       return res.status(404).json({ error: 'Question not found' });
     }
 
+    // Get team to get numeric ID for progress table
+    const team = await getTeamByIdOrUuid(teamId);
+    if (!team) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+
     const progress = await knex('team_progress')
-      .where({ team_id: teamId, question_id: questionId })
+      .where({ team_id: team.id, question_id: questionId })
       .first();
 
     const tips = [];
@@ -226,7 +298,7 @@ router.get('/question/:questionId/available-tips', async (req, res) => {
   }
 });
 
-// Mark question as completed (for timeout or when solution tip is used)
+// Mark question as completed (for timeout or max attempts)
 router.post('/question/:questionId/complete', async (req, res) => {
   try {
     const { teamId, reason } = req.body;
@@ -235,20 +307,32 @@ router.post('/question/:questionId/complete', async (req, res) => {
       return res.status(400).json({ error: 'Team ID is required' });
     }
 
+    // Validate that teamId is a UUID
+    if (!isUUID(teamId)) {
+      return res.status(400).json({ error: 'Only UUID access is allowed for security reasons' });
+    }
+
     const question = await knex('questions').where({ id: req.params.questionId }).first();
     if (!question) {
       return res.status(404).json({ error: 'Question not found' });
     }
 
+    // Get team to get numeric ID for progress table
+    const team = await getTeamByIdOrUuid(teamId);
+    if (!team) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+
     // Check if progress exists
     let progress = await knex('team_progress')
-      .where({ team_id: teamId, question_id: req.params.questionId })
+      .where({ team_id: team.id, question_id: req.params.questionId })
       .first();
 
     if (!progress) {
       // Create progress record if it doesn't exist
       const [progressId] = await knex('team_progress').insert({
-        team_id: teamId,
+        team_id: team.id,
+        team_uuid: team.uuid,
         question_id: req.params.questionId,
         completed: true,
         correct: false,
@@ -285,20 +369,32 @@ router.post('/question/:questionId/tip', async (req, res) => {
       return res.status(400).json({ error: 'Team ID and valid tip number (1-3) are required' });
     }
 
+    // Validate that teamId is a UUID
+    if (!isUUID(teamId)) {
+      return res.status(400).json({ error: 'Only UUID access is allowed for security reasons' });
+    }
+
     const question = await knex('questions').where({ id: req.params.questionId }).first();
     if (!question) {
       return res.status(404).json({ error: 'Question not found' });
     }
 
+    // Get team to get numeric ID for progress table
+    const team = await getTeamByIdOrUuid(teamId);
+    if (!team) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+
     // Check if team already used this tip or higher
     let progress = await knex('team_progress')
-      .where({ team_id: teamId, question_id: req.params.questionId })
+      .where({ team_id: team.id, question_id: req.params.questionId })
       .first();
 
     if (!progress) {
       // Create progress record if it doesn't exist
       const [progressId] = await knex('team_progress').insert({
-        team_id: teamId,
+        team_id: team.id,
+        team_uuid: team.uuid,
         question_id: req.params.questionId,
         used_tip: tipNumber,
         time_started: new Date()
@@ -342,19 +438,31 @@ router.post('/question/:questionId/answer', async (req, res) => {
       return res.status(400).json({ error: 'Team ID and answer are required' });
     }
 
+    // Validate that teamId is a UUID
+    if (!isUUID(teamId)) {
+      return res.status(400).json({ error: 'Only UUID access is allowed for security reasons' });
+    }
+
     const question = await knex('questions').where({ id: req.params.questionId }).first();
     if (!question) {
       return res.status(404).json({ error: 'Question not found' });
     }
 
+    // Get team to get numeric ID for progress table
+    const team = await getTeamByIdOrUuid(teamId);
+    if (!team) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+
     let progress = await knex('team_progress')
-      .where({ team_id: teamId, question_id: req.params.questionId })
+      .where({ team_id: team.id, question_id: req.params.questionId })
       .first();
 
     if (!progress) {
       // Create progress record with first attempt
       const [progressId] = await knex('team_progress').insert({
-        team_id: teamId,
+        team_id: team.id,
+        team_uuid: team.uuid,
         question_id: req.params.questionId,
         attempt_1: answer,
         time_started: new Date()
@@ -412,12 +520,13 @@ router.post('/question/:questionId/answer', async (req, res) => {
           points_awarded: points
         });
 
-      // Get team info to broadcast scoreboard update
-      const team = await knex('teams').where({ id: teamId }).first();
+      // Get team info to broadcast scoreboard update - team is already loaded
       if (team) {
-        console.log(`🎯 Correct answer! Broadcasting scoreboard update for event ${team.event_id}`);
+        // Use event_uuid if available, otherwise fall back to event_id
+        const eventIdentifier = team.event_uuid || team.event_id;
+        console.log(`🎯 Correct answer! Broadcasting scoreboard update for event ${eventIdentifier} (team.event_uuid: ${team.event_uuid}, team.event_id: ${team.event_id})`);
         // Broadcast scoreboard update to all clients in this event
-        broadcastScoreboardUpdate(team.event_id);
+        broadcastScoreboardUpdate(eventIdentifier);
       } else {
         console.log(`❌ Team ${teamId} not found for scoreboard update`);
       }
@@ -440,11 +549,15 @@ router.post('/question/:questionId/answer', async (req, res) => {
 });
 
 // Get scoreboard for event
-router.get('/event/:eventId/scoreboard', async (req, res) => {
+router.get('/event/:eventId/scoreboard', requireEventUUID, async (req, res) => {
   try {
+    const eventId = req.params.eventId;
+    console.log('📊 Loading scoreboard for eventId:', eventId);
+    
+    // Since we require UUID, we know eventId is a UUID
     const scoreboard = await knex('teams')
       .leftJoin('team_progress', 'teams.id', 'team_progress.team_id')
-      .where({ 'teams.event_id': req.params.eventId })
+      .where({ 'teams.event_uuid': eventId })
       .groupBy('teams.id')
       .select(
         'teams.id',
@@ -456,6 +569,9 @@ router.get('/event/:eventId/scoreboard', async (req, res) => {
       )
       .orderBy('total_points', 'desc')
       .orderBy('last_answer_time', 'asc');
+    
+    console.log('📊 Scoreboard loaded:', scoreboard.length, 'teams found');
+    console.log('📊 Scoreboard data:', scoreboard);
 
     res.json(scoreboard);
   } catch (error) {
