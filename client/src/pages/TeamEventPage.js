@@ -38,28 +38,37 @@ const TeamEventPage = () => {
   const [showQrCode, setShowQrCode] = useState(false);
 
   useEffect(() => {
-    loadTeamAndEvent();
+    const initializePage = async () => {
+      try {
+        // Load team and event data
+        await loadTeamAndEvent();
+        
+        // After successful load, the loading will be set to false in loadTeamAndEvent
+        // and the countdown will be initialized
+      } catch (error) {
+        console.error('Error initializing page:', error);
+        await handleNotFoundError();
+        setLoading(false);
+      }
+    };
+    
+    initializePage();
   }, [teamId, eventId]);
 
   useEffect(() => {
-    if (event) {
+    if (event && !loading) {
+      // Initialize countdown immediately after loading
+      updateCountdown();
       const timer = setInterval(updateCountdown, 1000);
       return () => clearInterval(timer);
     }
-  }, [event]);
+  }, [event, loading]);
 
   useEffect(() => {
-    if (isEventStarted && !isEventEnded) {
+    if (isEventStarted && !isEventEnded && !loading) {
       loadTeamProgress();
     }
-  }, [isEventStarted, isEventEnded]);
-
-  // Trigger automatic redirect when team/event not found
-  useEffect(() => {
-    if (!loading && (!team || !event)) {
-      handleNotFoundError();
-    }
-  }, [loading, team, event]);
+  }, [isEventStarted, isEventEnded, loading]);
 
   // Socket.IO listeners for real-time updates
   useEffect(() => {
@@ -119,6 +128,7 @@ const TeamEventPage = () => {
         }
       } catch (allEventsError) {
         console.log('❌ All events search failed:', allEventsError);
+        throw new Error('Event not found'); // Use generic error
       }
     }
     
@@ -145,133 +155,133 @@ const TeamEventPage = () => {
   };
 
   const loadTeamAndEvent = async () => {
+    console.log('🔍 Loading team and event with IDs:', { teamId, eventId });
+    
+    let teamData = null;
+    let eventData = null;
+    
+    // Try to load team - handle potential UUID protection
     try {
-      console.log('🔍 Loading team and event with IDs:', { teamId, eventId });
-      
-      let teamData = null;
-      let eventData = null;
-      
-      // Try to load team - handle potential UUID protection
-      try {
-        const teamResponse = await axios.get(`/api/teams/${teamId}`);
-        teamData = teamResponse.data;
-        console.log('✅ Team loaded via direct access');
-      } catch (teamError) {
-        console.log('❌ Direct team access failed:', teamError.response?.status);
-        // Team loading failed - this is critical, so we'll handle it in the outer catch
-        throw teamError;
-      }
-      
-      // Try to load event - handle potential UUID protection
-      try {
-        const eventResponse = await axios.get(`/api/events/${eventId}`);
-        eventData = eventResponse.data;
-        console.log('✅ Event loaded via direct access');
-      } catch (eventError) {
-        console.log('❌ Direct event access failed, trying alternative approach:', eventError.response?.status);
-        
-        // Try loading all events and finding the right one
-        try {
-          const allEventsResponse = await axios.get('/api/events');
-          const foundEvent = allEventsResponse.data.find(event => 
-            event.id == eventId || 
-            event.uuid === eventId || 
-            event.id === parseInt(eventId)
-          );
-          
-          if (foundEvent) {
-            eventData = foundEvent;
-            console.log('✅ Event found via all events search');
-          } else {
-            console.log('❌ Event not found in all events list');
-            throw new Error('Event not found');
-          }
-        } catch (allEventsError) {
-          console.log('❌ All events search also failed:', allEventsError);
-          throw eventError; // Use original error
-        }
-      }
-
-      console.log('📋 Team data received:', teamData);
-      console.log('📋 Event data received:', eventData);
-
-      // Verify team belongs to this event - handle both UUIDs and numeric IDs
-      // Team can be linked to event via:
-      // 1. team.event_uuid === event.uuid (new UUID system)
-      // 2. team.event_id === event.id (old numeric system)
-      // 3. URL parameters might be either UUIDs or numeric IDs
-      
-      const teamEventId = teamData.event_id;
-      const teamEventUuid = teamData.event_uuid;
-      const eventId_numeric = eventData.id;
-      const eventUuid = eventData.uuid;
-      const urlEventId = eventId;
-      
-      console.log('🔍 Validation parameters:', {
-        teamEventId,
-        teamEventUuid,
-        eventId_numeric,
-        eventUuid,
-        urlEventId
-      });
-      
-      const uuidMatch = teamEventUuid && eventUuid && teamEventUuid === eventUuid;
-      const numericMatch = teamEventId && eventId_numeric && teamEventId === eventId_numeric;
-      const urlUuidMatch = teamEventUuid && teamEventUuid === urlEventId;
-      const urlNumericMatch = teamEventId && teamEventId === parseInt(urlEventId);
-      const eventUuidMatch = eventUuid && eventUuid === urlEventId;
-      const eventNumericMatch = eventId_numeric && eventId_numeric === parseInt(urlEventId);
-      
-      console.log('🔍 Match results:', {
-        uuidMatch,
-        numericMatch,
-        urlUuidMatch,
-        urlNumericMatch,
-        eventUuidMatch,
-        eventNumericMatch
-      });
-      
-      const teamBelongsToEvent = 
-        uuidMatch || numericMatch || urlUuidMatch || urlNumericMatch || eventUuidMatch || eventNumericMatch;
-      
-      console.log('✅ Team belongs to event:', teamBelongsToEvent);
-      
-      if (!teamBelongsToEvent) {
-        console.log('❌ Team validation failed - detailed info:', {
-          teamEventId,
-          teamEventUuid,
-          eventId_numeric,
-          eventUuid,
-          urlEventId,
-          teamData,
-          eventData
-        });
-        toast.error('Team gehört nicht zu diesem Event');
-        navigate('/');
-        return;
-      }
-
-      setTeam(teamData);
-      setEvent(eventData);
-      
-      // Store in localStorage for automatic navigation - use UUIDs when available
-      localStorage.setItem('currentTeam', JSON.stringify({
-        teamId: teamData.uuid || teamData.id,
-        eventId: eventData.uuid || eventData.id,
-        teamName: teamData.name,
-        eventName: eventData.name
-      }));
-
-      // Generate QR Code for this team page
-      generateQrCode(teamData.uuid || teamData.id, eventData.uuid || eventData.id);
-
-      updateCountdown();
-    } catch (error) {
-      console.error('Error loading team/event:', error);
-      await handleNotFoundError();
-    } finally {
-      setLoading(false);
+      const teamResponse = await axios.get(`/api/teams/${teamId}`);
+      teamData = teamResponse.data;
+      console.log('✅ Team loaded via direct access');
+    } catch (teamError) {
+      console.log('❌ Direct team access failed:', teamError.response?.status);
+      // Team loading failed - this is critical, so we'll handle it in the outer catch
+      throw teamError;
     }
+    
+    // Try to load event - handle potential UUID protection
+    try {
+      const eventResponse = await axios.get(`/api/events/${eventId}`);
+      eventData = eventResponse.data;
+      console.log('✅ Event loaded via direct access');
+    } catch (eventError) {
+      console.log('❌ Direct event access failed, trying alternative approach:', eventError.response?.status);
+      
+      // Try loading all events and finding the right one
+      try {
+        const allEventsResponse = await axios.get('/api/events');
+        const foundEvent = allEventsResponse.data.find(event => 
+          event.id === eventId || 
+          event.uuid === eventId || 
+          event.id === parseInt(eventId)
+        );
+        
+        if (foundEvent) {
+          eventData = foundEvent;
+          console.log('✅ Event found via all events search');
+        } else {
+          console.log('❌ Event not found in all events list');
+          throw new Error('Event not found');
+        }
+      } catch (allEventsError) {
+        console.log('❌ All events search also failed:', allEventsError);
+        throw new Error('Event not found');
+      }
+    }
+
+    console.log('📋 Team data received:', teamData);
+    console.log('📋 Event data received:', eventData);
+
+    // Verify team belongs to this event - handle both UUIDs and numeric IDs
+    const teamEventId = teamData.event_id;
+    const teamEventUuid = teamData.event_uuid;
+    const eventId_numeric = eventData.id;
+    const eventUuid = eventData.uuid;
+    const urlEventId = eventId;
+    
+    console.log('🔍 Validation parameters:', {
+      teamEventId,
+      teamEventUuid,
+      eventId_numeric,
+      eventUuid,
+      urlEventId
+    });
+    
+    const uuidMatch = teamEventUuid && eventUuid && teamEventUuid === eventUuid;
+    const numericMatch = teamEventId && eventId_numeric && teamEventId === eventId_numeric;
+    const urlUuidMatch = teamEventUuid && teamEventUuid === urlEventId;
+    const urlNumericMatch = teamEventId && teamEventId === parseInt(urlEventId);
+    const eventUuidMatch = eventUuid && eventUuid === urlEventId;
+    const eventNumericMatch = eventId_numeric && eventId_numeric === parseInt(urlEventId);
+    
+    console.log('🔍 Match results:', {
+      uuidMatch,
+      numericMatch,
+      urlUuidMatch,
+      urlNumericMatch,
+      eventUuidMatch,
+      eventNumericMatch
+    });
+    
+    const teamBelongsToEvent = 
+      uuidMatch || numericMatch || urlUuidMatch || urlNumericMatch || eventUuidMatch || eventNumericMatch;
+    
+    console.log('✅ Team belongs to event:', teamBelongsToEvent);
+    
+    if (!teamBelongsToEvent) {
+      console.log('❌ Team validation failed');
+      toast.error('Team gehört nicht zu diesem Event');
+      navigate('/');
+      return;
+    }
+
+    // Set the data
+    setTeam(teamData);
+    setEvent(eventData);
+    
+    // Store in localStorage for automatic navigation - use UUIDs when available
+    localStorage.setItem('currentTeam', JSON.stringify({
+      teamId: teamData.uuid || teamData.id,
+      eventId: eventData.uuid || eventData.id,
+      teamName: teamData.name,
+      eventName: eventData.name
+    }));
+
+    // Generate QR Code for this team page
+    await generateQrCode(teamData.uuid || teamData.id, eventData.uuid || eventData.id);
+
+    // Initialize countdown and determine event status
+    const now = new Date().getTime();
+    const startTime = new Date(eventData.start_time).getTime();
+    const endTime = eventData.end_time ? new Date(eventData.end_time).getTime() : null;
+    
+    if (now >= startTime) {
+      if (endTime && now >= endTime) {
+        setIsEventEnded(true);
+        setIsEventStarted(false);
+      } else {
+        setIsEventStarted(true);
+        setIsEventEnded(false);
+      }
+    } else {
+      setIsEventStarted(false);
+      setIsEventEnded(false);
+    }
+    
+    // Loading complete
+    setLoading(false);
   };
 
   const loadTeamProgress = async () => {
@@ -378,7 +388,13 @@ const TeamEventPage = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <p className="text-white text-lg">Lade Team-Event...</p>
+          <p className="text-gray-300 text-sm mt-2">
+            Prüfe Team-Zugehörigkeit und Event-Status...
+          </p>
+        </div>
       </div>
     );
   }

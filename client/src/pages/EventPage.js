@@ -28,12 +28,33 @@ const EventPage = () => {
   const [generationProgress, setGenerationProgress] = useState({ progress: 0, total: 3, message: '' });
 
   useEffect(() => {
-    loadEvent();
-    fetchAiConfig();
-    checkExistingTeam();
+    const initializePage = async () => {
+      try {
+        // Load event and AI config in parallel
+        const [eventData, aiConfigData] = await Promise.all([
+          loadEvent(),
+          fetchAiConfig()
+        ]);
+        
+        // Check if user already has a team for this event
+        const hasExistingTeam = await checkExistingTeam();
+        
+        // If no existing team found, show the event page
+        if (!hasExistingTeam) {
+          setLoading(false);
+        }
+        // If existing team found, redirect will happen in checkExistingTeam
+        
+      } catch (error) {
+        console.error('Error initializing page:', error);
+        setLoading(false);
+      }
+    };
+    
+    initializePage();
   }, [eventId]);
 
-  const checkExistingTeam = () => {
+  const checkExistingTeam = async () => {
     const currentTeam = localStorage.getItem('currentTeam');
     if (currentTeam) {
       try {
@@ -44,20 +65,23 @@ const EventPage = () => {
           setTimeout(() => {
             navigate(`/team/${teamData.teamId}/event/${teamData.eventId}`);
           }, 1000);
+          return true; // Team found and redirecting
         }
       } catch (error) {
         console.error('Error parsing stored team data:', error);
         localStorage.removeItem('currentTeam');
       }
     }
+    return false; // No existing team found
   };
 
   useEffect(() => {
-    if (event) {
+    if (event && !loading) {
+      updateCountdown(); // Initial countdown calculation
       const timer = setInterval(updateCountdown, 1000);
       return () => clearInterval(timer);
     }
-  }, [event]);
+  }, [event, loading]);
 
   // Socket.IO listeners for live logo updates
   useEffect(() => {
@@ -103,13 +127,12 @@ const EventPage = () => {
     try {
       const response = await axios.get(`/api/events/${eventId}`);
       setEvent(response.data);
-      updateCountdown();
+      return response.data;
     } catch (error) {
       console.error('Error loading event:', error);
       toast.error('Event nicht gefunden');
       navigate('/');
-    } finally {
-      setLoading(false);
+      throw error;
     }
   };
 
@@ -117,8 +140,10 @@ const EventPage = () => {
     try {
       const response = await axios.get('/api/teams/ai-config');
       setAiConfig(response.data);
+      return response.data;
     } catch (error) {
       console.error('Error fetching AI config:', error);
+      return { aiEnabled: false };
     }
   };
 
@@ -273,7 +298,12 @@ const EventPage = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <p className="text-white">
+            Lade Event...
+          </p>
+        </div>
       </div>
     );
   }
