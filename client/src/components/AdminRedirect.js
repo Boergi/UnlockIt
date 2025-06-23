@@ -9,10 +9,17 @@ const AdminRedirect = () => {
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
+    // Only run once when component mounts
+    let isMounted = true;
+    
     const checkAndRedirect = async () => {
+      if (!isMounted) return;
+      
       try {
         // First check if setup is needed
         const setupResponse = await axios.get('/api/auth/setup-status');
+        
+        if (!isMounted) return; // Component unmounted during request
         
         if (setupResponse.data.needsSetup) {
           // No users exist, redirect to setup
@@ -29,18 +36,38 @@ const AdminRedirect = () => {
             // User not authenticated, go to login
             navigate('/admin/login');
           }
+        } else {
+          // Still loading auth state, wait a bit and try again
+          setTimeout(() => {
+            if (isMounted && !loading) {
+              if (isAuthenticated) {
+                navigate('/admin/dashboard');
+              } else {
+                navigate('/admin/login');
+              }
+            }
+          }, 100);
         }
       } catch (error) {
         console.error('Error checking admin status:', error);
-        // On error, default to login
-        navigate('/admin/login');
+        if (isMounted) {
+          // On error, default to login
+          navigate('/admin/login');
+        }
       } finally {
-        setChecking(false);
+        if (isMounted) {
+          setChecking(false);
+        }
       }
     };
 
     checkAndRedirect();
-  }, [navigate, loading, isAuthenticated]);
+    
+    // Cleanup function
+    return () => {
+      isMounted = false;
+    };
+  }, []); // ← EMPTY dependency array - run only once!
 
   if (checking || loading) {
     return (

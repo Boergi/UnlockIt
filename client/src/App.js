@@ -21,6 +21,7 @@ import EventManagement from './pages/EventManagement';
 import QuestionManagement from './pages/QuestionManagement';
 import LiveModeration from './pages/LiveModeration';
 import ProtectedRoute from './components/ProtectedRoute';
+import NotFound from './pages/NotFound';
 
 function App() {
   return (
@@ -82,6 +83,9 @@ function App() {
                   <LiveModeration />
                 </ProtectedRoute>
               } />
+              
+              {/* 404 Catch-all Route - MUST be last! */}
+              <Route path="*" element={<NotFound />} />
             </Routes>
             
             <Toaster
