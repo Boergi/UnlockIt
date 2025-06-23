@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useSocket } from '../contexts/SocketContext';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import { getImageUrl, buildFrontendUrl } from '../utils/apiUtils';
 import QRCode from 'qrcode';
 import { 
   Users, 
@@ -438,7 +439,7 @@ const TeamEventPage = () => {
               {/* Event Logo */}
               {event.logo_url && (
                 <img
-                  src={`http://localhost:3001${event.logo_url}`}
+                  src={getImageUrl(event.logo_url)}
                   alt={`${event.name} Logo`}
                   className="w-16 h-16 rounded-xl object-cover"
                   onError={(e) => { e.target.style.display = 'none' }}
@@ -452,7 +453,7 @@ const TeamEventPage = () => {
                   <span>Team: {team.name}</span>
                   {team.logo_url && (
                     <img
-                      src={`http://localhost:3001${team.logo_url}`}
+                      src={getImageUrl(team.logo_url)}
                       alt={`${team.name} Logo`}
                       className="w-6 h-6 rounded object-cover ml-2"
                     />

@@ -342,7 +342,7 @@ const initServer = async () => {
       
       if (isFrontendRoute) {
         // Redirect to React dev server
-        const redirectUrl = `http://localhost:3000${req.originalUrl}`;
+        const redirectUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}${req.originalUrl}`;
         console.log(`🔄 Redirecting ${req.originalUrl} to React dev server: ${redirectUrl}`);
         res.redirect(302, redirectUrl);
       } else {

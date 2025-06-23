@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import { getImageUrl, buildFrontendUrl } from '../utils/apiUtils';
 import ConfirmationModal from '../components/ConfirmationModal';
 import QRCode from 'qrcode';
 import { QrCode, Download, X } from 'lucide-react';
@@ -217,7 +218,7 @@ const AdminDashboard = () => {
                     {event.logo_url && (
                       <div className="relative">
                         <img
-                          src={`http://localhost:3001${event.logo_url}`}
+                          src={getImageUrl(event.logo_url)}
                           alt={`${event.name} Logo`}
                           className="w-12 h-12 rounded-lg object-cover"
                           onError={(e) => { e.target.style.display = 'none' }}
@@ -259,7 +260,7 @@ const AdminDashboard = () => {
                       Bearbeiten
                     </Link>
                     <a
-                      href={`http://localhost:3000/scoreboard/${event.uuid || event.id}`}
+                      href={buildFrontendUrl(`/scoreboard/${event.uuid || event.id}`)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm transition-colors"

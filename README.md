@@ -63,6 +63,7 @@ Bearbeite die `.env` Datei:
 # Server Configuration
 PORT=3001
 NODE_ENV=development
+FRONTEND_URL=http://localhost:3000
 
 # Database Configuration
 DB_HOST=localhost

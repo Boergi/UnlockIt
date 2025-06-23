@@ -4,6 +4,7 @@ import { useSocket } from '../contexts/SocketContext';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import { Users, Lock, Calendar, Play, Clock, Palette, X, Trophy } from 'lucide-react';
+import { getImageUrl, buildFrontendUrl } from '../utils/apiUtils';
 
 const EventPage = () => {
   const { eventId } = useParams();
@@ -333,7 +334,7 @@ const EventPage = () => {
             {event.logo_url ? (
               <div className="relative inline-block mb-4">
                 <img
-                  src={`http://localhost:3001${event.logo_url}`}
+                  src={getImageUrl(event.logo_url)}
                   alt={`${event.name} Logo`}
                   className="w-20 h-20 rounded-xl object-cover shadow-lg mx-auto"
                   onError={(e) => {
@@ -549,7 +550,7 @@ const EventPage = () => {
                       <div className="aspect-square mb-4 bg-white/10 rounded-lg overflow-hidden relative">
                         {option ? (
                           <img
-                            src={`http://localhost:3001${option.url}`}
+                            src={getImageUrl(option.url)}
                             alt={`Logo Option ${option.id}`}
                             className="w-full h-full object-cover"
                             onError={(e) => {

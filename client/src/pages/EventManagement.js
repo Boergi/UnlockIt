@@ -8,6 +8,7 @@ import ConfirmationModal from '../components/ConfirmationModal';
 import EventModal from '../components/EventModal';
 import { useSocket } from '../contexts/SocketContext';
 import { formatDateTimeDisplay } from '../utils/dateUtils';
+import { getImageUrl, buildFrontendUrl } from '../utils/apiUtils';
 
 const EventManagement = () => {
   const location = useLocation();
@@ -742,7 +743,7 @@ const EventManagement = () => {
                              {team.logo_url && (
                                <div className="relative mr-2">
                                  <img 
-                                   src={`http://localhost:3001${team.logo_url}`}
+                                   src={getImageUrl(team.logo_url)}
                                    alt={`${team.name} Logo`}
                                    className="w-8 h-8 rounded-full object-cover"
                                    onError={(e) => { e.target.style.display = 'none' }}
@@ -965,7 +966,7 @@ const EventManagement = () => {
                       <div className="aspect-square mb-4 bg-white/10 rounded-lg overflow-hidden relative">
                         {option ? (
                           <img
-                            src={`http://localhost:3001${option.url}`}
+                            src={getImageUrl(option.url)}
                             alt={`Logo Option ${option.id}`}
                             className="w-full h-full object-cover"
                             onError={(e) => {
