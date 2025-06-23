@@ -355,7 +355,8 @@ const QuestionManagement = () => {
                   className="w-full bg-white/20 text-white border border-white/30 rounded-lg px-4 py-2"
                 />
                 <p className="text-gray-400 text-sm mt-1">
-                  Unterstützte Formate: JPG, PNG, GIF, WebP (max. 5MB)
+                  Unterstützte Formate: JPG, PNG, GIF, WebP (max. 10MB)<br/>
+                  <span className="text-green-400">📸 Bilder werden automatisch optimiert (max. 800x600px)</span>
                 </p>
               </div>
 
@@ -460,6 +461,13 @@ const QuestionManagement = () => {
                       <div className="flex items-center text-purple-400">
                         <FileImage className="w-4 h-4 mr-1" />
                         <span className="text-sm">Bild vorhanden</span>
+                        <img
+                          src={question.image_path}
+                          alt="Vorschau"
+                          className="w-8 h-8 ml-2 rounded object-cover cursor-pointer hover:scale-150 transition-transform duration-200"
+                          onClick={() => window.open(question.image_path, '_blank')}
+                          title="Klicken zum Vergrößern"
+                        />
                       </div>
                     )}
                   </div>
@@ -518,7 +526,9 @@ const QuestionManagement = () => {
                         <img
                           src={previewQuestion.image_path}
                           alt="Frage Bild"
-                          className="max-w-full max-h-64 mx-auto rounded-lg shadow-lg"
+                          className="max-w-full max-h-80 mx-auto rounded-lg shadow-lg object-contain cursor-pointer hover:scale-105 transition-transform duration-200"
+                          onClick={() => window.open(previewQuestion.image_path, '_blank')}
+                          title="Klicken zum Vergrößern"
                         />
                       </div>
                     )}

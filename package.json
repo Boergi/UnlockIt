@@ -17,7 +17,8 @@
     "install:all": "npm install && cd client && npm install",
     "migrate": "knex migrate:latest --knexfile server/knexfile.js",
     "migrate:rollback": "knex migrate:rollback --knexfile server/knexfile.js",
-    "seed": "knex seed:run --knexfile server/knexfile.js"
+    "seed": "knex seed:run --knexfile server/knexfile.js",
+    "process-images": "node server/scripts/processExistingImages.js"
   },
   "dependencies": {
     "axios": "^1.10.0",
@@ -35,6 +36,7 @@
     "mysql2": "^3.6.5",
     "quill": "^2.0.3",
     "react-quill": "^2.0.0",
+    "sharp": "^0.34.2",
     "socket.io": "^4.7.4",
     "uuid": "^9.0.1"
   },

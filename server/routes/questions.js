@@ -3,6 +3,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { authenticateToken } = require('./auth');
+const { processQuestionImage } = require('../utils/imageUtils');
 const router = express.Router();
 
 const knex = require('knex')(require('../knexfile')[process.env.NODE_ENV || 'development']);
@@ -119,7 +120,18 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
     };
 
     if (req.file) {
-      questionData.image_path = `/uploads/questions/${req.file.filename}`;
+      try {
+        // Process image and generate thumbnail
+        const processedImagePath = await processQuestionImage(req.file.path, req.file.filename);
+        const processedFilename = path.basename(processedImagePath);
+        questionData.image_path = `/uploads/questions/${processedFilename}`;
+        
+        console.log(`✅ Question image processed: ${req.file.filename} -> ${processedFilename}`);
+      } catch (imageError) {
+        console.error('Error processing question image:', imageError);
+        // Fallback to original image if processing fails
+        questionData.image_path = `/uploads/questions/${req.file.filename}`;
+      }
     }
 
     const [questionId] = await knex('questions').insert(questionData);
@@ -158,7 +170,32 @@ router.put('/:id', authenticateToken, upload.single('image'), async (req, res) =
     };
 
     if (req.file) {
-      updateData.image_path = `/uploads/questions/${req.file.filename}`;
+      try {
+        // Get existing image path to potentially delete old image
+        const existingQuestion = await knex('questions').where({ id: req.params.id }).first();
+        
+        // Process new image and generate thumbnail
+        const processedImagePath = await processQuestionImage(req.file.path, req.file.filename);
+        const processedFilename = path.basename(processedImagePath);
+        updateData.image_path = `/uploads/questions/${processedFilename}`;
+        
+        // Delete old image if it exists
+        if (existingQuestion && existingQuestion.image_path) {
+          const oldImagePath = path.join(__dirname, '..', existingQuestion.image_path);
+          try {
+            await fs.promises.unlink(oldImagePath);
+            console.log(`🗑️ Deleted old question image: ${existingQuestion.image_path}`);
+          } catch (unlinkError) {
+            console.warn('⚠️ Could not delete old image:', unlinkError.message);
+          }
+        }
+        
+        console.log(`✅ Question image updated: ${req.file.filename} -> ${processedFilename}`);
+      } catch (imageError) {
+        console.error('Error processing question image:', imageError);
+        // Fallback to original image if processing fails
+        updateData.image_path = `/uploads/questions/${req.file.filename}`;
+      }
     }
 
     await knex('questions')
@@ -188,12 +225,26 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       });
     }
 
+    // Get question data to delete associated image
+    const question = await knex('questions').where({ id: req.params.id }).first();
+    
     const deleted = await knex('questions')
       .where({ id: req.params.id })
       .del();
 
     if (!deleted) {
       return res.status(404).json({ error: 'Question not found' });
+    }
+
+    // Delete associated image file if it exists
+    if (question && question.image_path) {
+      const imagePath = path.join(__dirname, '..', question.image_path);
+      try {
+        await fs.promises.unlink(imagePath);
+        console.log(`🗑️ Deleted question image: ${question.image_path}`);
+      } catch (unlinkError) {
+        console.warn('⚠️ Could not delete question image:', unlinkError.message);
+      }
     }
 
     res.json({ message: 'Question deleted successfully' });

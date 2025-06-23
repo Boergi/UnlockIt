@@ -433,7 +433,9 @@ const GamePlay = () => {
                   <img
                     src={currentQuestion.image_path}
                     alt="Rätsel-Bild"
-                    className="max-w-full max-h-64 mx-auto rounded-lg shadow-lg"
+                    className="max-w-full max-h-80 mx-auto rounded-lg shadow-lg object-contain cursor-pointer hover:scale-105 transition-transform duration-200"
+                    onClick={() => window.open(currentQuestion.image_path, '_blank')}
+                    title="Klicken zum Vergrößern"
                   />
                 </div>
               )}
