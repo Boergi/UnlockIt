@@ -328,47 +328,32 @@ const initServer = async () => {
       res.sendFile(path.join(__dirname, '../client/build', 'index.html'));
     });
   } else {
-    console.log('⚠️ Development mode - React app served by Create React App dev server on port 3000');
-    
-    // Check if build directory exists for fallback 404 page
-    const buildPath = path.join(__dirname, '../client/build');
-    const indexPath = path.join(buildPath, 'index.html');
-    const hasBuild = require('fs').existsSync(buildPath) && require('fs').existsSync(indexPath);
+    console.log('⚠️ Development mode - React app should be served by Create React App dev server on port 3000');
     
     // 404 handler for development (API routes only)
     app.use('/api/*', (req, res) => {
       res.status(404).json({ error: 'API route not found' });
     });
     
-    // For non-API routes in development, serve React app or helpful message
+    // For non-API routes in development, redirect to React dev server
     app.use('*', (req, res) => {
-      if (hasBuild) {
-        // If we have a build, serve the React app (which will show 404 page for unknown routes)
-        res.setHeader('Content-Type', 'text/html');
-        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-        res.sendFile(indexPath);
+      const frontendRoutes = ['/admin', '/events', '/team', '/join', '/play', '/scoreboard', '/static'];
+      const isFrontendRoute = frontendRoutes.some(route => req.path.startsWith(route));
+      
+      if (isFrontendRoute) {
+        // Redirect to React dev server
+        const redirectUrl = `http://localhost:3000${req.originalUrl}`;
+        console.log(`🔄 Redirecting ${req.originalUrl} to React dev server: ${redirectUrl}`);
+        res.redirect(302, redirectUrl);
       } else {
-        // No build available, provide helpful message
-        const frontendRoutes = ['/admin', '/events', '/team', '/join', '/play', '/scoreboard'];
-        const isFrontendRoute = frontendRoutes.some(route => req.path.startsWith(route));
-        
-        if (isFrontendRoute) {
-          res.status(200).json({ 
-            message: 'Frontend route detected', 
-            note: `Please access this route via the React dev server: http://localhost:3000${req.originalUrl}`,
-            currentUrl: `http://localhost:${req.get('host')}${req.originalUrl}`,
-            correctUrl: `http://localhost:3000${req.originalUrl}`
-          });
-        } else {
-          res.status(404).json({ 
-            error: 'Route not found',
-            message: 'This route does not exist in the API or frontend',
-            availableEndpoints: {
-              api: 'http://localhost:3001/api/*',
-              frontend: 'http://localhost:3000/*'
-            }
-          });
-        }
+        res.status(404).json({ 
+          error: 'Route not found',
+          message: 'This route does not exist in the API or frontend',
+          availableEndpoints: {
+            api: 'http://localhost:3001/api/*',
+            frontend: 'http://localhost:3000/*'
+          }
+        });
       }
     });
   }
