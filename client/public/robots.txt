@@ -1,0 +1,6 @@
+User-agent: *
+Disallow: /admin/
+Allow: /
+
+# UnlockIt - Gamifizierte Team-Rätsel
+# Sitemap: https://yoursite.com/sitemap.xml 
