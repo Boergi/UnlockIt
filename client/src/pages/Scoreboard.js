@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSocket } from '../contexts/SocketContext';
+import { getImageUrl } from '../utils/apiUtils';
 import axios from 'axios';
 import { Trophy, Medal, Award, Users, Target, Clock, ArrowLeft } from 'lucide-react';
 
@@ -209,7 +210,17 @@ const Scoreboard = () => {
             <Trophy className="w-12 h-12 text-yellow-400 mr-3" />
             <h1 className="text-4xl font-bold text-white">Live Scoreboard</h1>
           </div>
-          <h2 className="text-xl text-gray-300">{event?.name}</h2>
+          <div className="flex items-center justify-center">
+            {/* Event Logo */}
+            {event?.logo_url && (
+              <img
+                src={getImageUrl(event.logo_url)}
+                alt={`${event.name} Logo`}
+                className="w-32 h-32 rounded-full object-cover border-2 border-white/20 mr-3"
+              />
+            )}
+            <h2 className="text-xl text-gray-300">{event?.name}</h2>
+          </div>
         </div>
 
         {/* Scoreboard */}
@@ -230,6 +241,16 @@ const Scoreboard = () => {
                     <div className="flex-shrink-0">
                       {getRankIcon(index + 1)}
                     </div>
+                    {/* Team Logo */}
+                    {team.logo_url && (
+                      <div className="flex-shrink-0">
+                        <img
+                          src={getImageUrl(team.logo_url)}
+                          alt={`${team.name} Logo`}
+                          className="w-12 h-12 rounded-full object-cover border-2 border-white/20"
+                        />
+                      </div>
+                    )}
                     <div className="min-w-0 flex-1">
                       <h3 className="text-lg font-semibold text-white truncate">
                         {team.name}
