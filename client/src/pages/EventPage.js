@@ -22,6 +22,7 @@ const EventPage = () => {
   // Logo generation states
   const [aiConfig, setAiConfig] = useState({ aiEnabled: false });
   const [generateLogo, setGenerateLogo] = useState(false);
+  const [logoDescription, setLogoDescription] = useState('');
   const [generatingLogo, setGeneratingLogo] = useState(false);
   const [logoOptions, setLogoOptions] = useState([]);
   const [showLogoSelector, setShowLogoSelector] = useState(false);
@@ -198,7 +199,7 @@ const EventPage = () => {
       
       if (generateLogo && aiConfig.aiEnabled) {
         toast.success(`Team "${team.name}" erstellt! Logo-Optionen werden generiert...`);
-        await generateLogoOptions(teamName.trim(), event.name);
+        await generateLogoOptions(teamName.trim(), event.name, logoDescription.trim());
       } else {
         toast.success(`Team "${team.name}" erfolgreich angemeldet!`);
         
@@ -227,7 +228,7 @@ const EventPage = () => {
     }
   };
 
-  const generateLogoOptions = async (teamName, eventName) => {
+  const generateLogoOptions = async (teamName, eventName, logoDescription = '') => {
     try {
       setLogoOptions([]);
       setGenerationProgress({ progress: 0, total: 3, message: 'Starte Logo-Generierung...' });
@@ -236,6 +237,7 @@ const EventPage = () => {
       const response = await axios.post('/api/teams/generate-logo', {
         teamName,
         eventName,
+        logoDescription,
         socketId: socket?.id
       });
       
@@ -294,6 +296,7 @@ const EventPage = () => {
     setGenerationProgress({ progress: 0, total: 3, message: '' });
     setTeamName('');
     setAccessCode('');
+    setLogoDescription('');
   };
 
   if (loading) {
@@ -454,7 +457,7 @@ const EventPage = () => {
                   <p className="text-sm text-gray-300 mb-3">
                     Lasse eine KI 3 professionelle Logo-Optionen für dein Team erstellen
                   </p>
-                  <label className="flex items-center space-x-2">
+                  <label className="flex items-center space-x-2 mb-3">
                     <input
                       type="checkbox"
                       checked={generateLogo}
@@ -466,6 +469,27 @@ const EventPage = () => {
                       3 AI Logo-Optionen generieren (~12 Cent)
                     </span>
                   </label>
+                  
+                  {/* Logo Description Field - only shown when AI generation is enabled */}
+                  {generateLogo && (
+                    <div className="mt-3 pt-3 border-t border-purple-500/30">
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Logo-Beschreibung (optional max 500 Zeichen)
+                      </label>
+                      <textarea
+                        value={logoDescription}
+                        onChange={(e) => setLogoDescription(e.target.value)}
+                        className="w-full px-3 py-2 bg-white/10 border border-gray-500 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm resize-none"
+                        placeholder="z.B. Moderne Gestaltung mit geometrischen Formen, Corporate-Stil, Vintage-Look..."
+                        rows="2"
+                        disabled={submitting}
+                        maxLength="500"
+                      />
+                      <p className="text-xs text-gray-400 mt-1">
+                        Beschreibe den gewünschten Stil oder Look für euer Logo. Ohne Angabe wird automatisch basierend auf dem Teamnamen generiert.
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -569,7 +593,7 @@ const EventPage = () => {
                             <div className="text-center">
                               <p className="text-white text-sm font-medium">Generiert parallel...</p>
                               <p className="text-gray-400 text-xs mt-1">
-                                {['Modern & Professional', 'Dynamic & Bold', 'Minimalist & Clean'][id - 1]}
+                                Erstelle individuelles Logo basierend auf Teamnamen...
                               </p>
                             </div>
                           </div>
@@ -587,7 +611,7 @@ const EventPage = () => {
                       <div className="text-center mb-4">
                         <h4 className="text-white font-medium mb-1">Option {id}</h4>
                         <p className="text-gray-400 text-sm">
-                          {option ? option.style : ['Modern & Professional', 'Dynamic & Bold', 'Minimalist & Clean'][id - 1]}
+                          {option ? option.style : `Stil ${id} - Angepasst an "${selectedTeam?.name}"`}
                         </p>
                       </div>
                       <button

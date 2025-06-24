@@ -25,6 +25,38 @@ Das UnlockIt-System verarbeitet automatisch alle hochgeladenen Bilder für Frage
 - **Bessere Performance**: Weniger Bandbreite erforderlich
 - **Konsistente Qualität**: Alle Bilder haben ähnliche Eigenschaften
 
+## KI-Logo-Generierung für Teams
+
+### Intelligente Teamnamen-Analyse
+
+Das System analysiert Teamnamen automatisch und erstellt passende Logo-Prompts:
+
+#### Erkannte Kategorien:
+- **Tiere**: Wolf, Löwe, Tiger, Adler, Drache, etc.
+- **Elemente**: Feuer, Wasser, Sturm, Blitz, etc.
+- **Technologie**: Cyber, Digital, Matrix, Quantum, etc.
+- **Weltraum**: Stern, Galaxie, Nova, Kosmisch, etc.
+- **Macht**: Kraft, Stärke, Donner, etc.
+
+#### Beispiele für spezifische Prompts:
+
+**Team "Fire Dragons":**
+- Stil 1: Kraftvolle Drachen-Silhouette mit Feuer-Elementen
+- Stil 2: Abstrakte Flammen-Geometrie mit Drachen-Essenz
+- Stil 3: Minimalistisches Symbol aus Feuer und Macht
+
+**Team "Cyber Wolves":**
+- Stil 1: Futuristischer Wolf mit Tech-Elementen
+- Stil 2: Digitale Geometrie mit Wolf-Charakteristika
+- Stil 3: Minimalistisches Tech-Logo mit Wolf-Spirit
+
+### Dynamische Style-Beschreibungen
+
+Statt generischer Labels werden teamspezifische Beschreibungen generiert:
+- **Tiere**: "Kraftvoll & Majestätisch", "Dynamisch & Furchtlos", "Elegant & Symbolisch"
+- **Elemente**: "Energetisch & Elementar", "Kraftvoll & Explosiv", "Abstrakt & Fließend"
+- **Tech**: "Futuristisch & Tech", "Digital & Innovativ", "Minimalistisch & Smart"
+
 ## Verarbeitung vorhandener Bilder
 
 Falls bereits Bilder im System vorhanden sind, können diese nachträglich verarbeitet werden:
@@ -88,4 +120,5 @@ Das System ist robust gegen Fehler:
 - **Lazy Loading**: Bilder werden nur bei Bedarf geladen
 - **Object-fit**: CSS optimiert die Bildanzeige
 - **Progressive JPEG**: Bilder laden schrittweise
-- **Caching**: Browser können Bilder effizient cachen 
+- **Caching**: Browser können Bilder effizient cachen
+- **Compression**: Intelligente Kompression für optimale Ladezeiten 

@@ -77,10 +77,287 @@ const deleteTeamLogoFiles = async (team, event) => {
   }
 };
 
+// Helper function to generate automatic logo description using OpenAI
+const generateAutoLogoDescription = async (teamName, eventName) => {
+  try {
+    // Enhanced theme detection for popular franchises and concepts
+    const name = teamName.toLowerCase();
+    let systemPrompt = 'You are a logo design expert. Write precise, creative logo descriptions for team names. Maximum 500 characters. Focus on colors, shapes, style and atmosphere. No text elements, only visual symbols. Write in English for optimal AI image generation.';
+    let userPrompt = `Write a detailed logo description for a team named "${teamName}". Maximum 500 characters. Describe colors, shapes, style and visual elements that match the team name. Write in English.`;
+    
+    // Detect specific themes and franchises for enhanced prompts
+    if (name.includes('power rangers') || name.includes('power ranger')) {
+      console.log('🎯 Theme detected: Power Rangers');
+      userPrompt = `Create a logo description for team "${teamName}" inspired by Power Rangers. Include 5 colored elements (red, blue, yellow, pink, green), futuristic helmets or masks, energy symbols, metallic textures, and heroic sci-fi aesthetic. Maximum 500 characters.`;
+    } else if (name.includes('avengers') || name.includes('avenger')) {
+      console.log('🎯 Theme detected: Avengers');
+      userPrompt = `Create a logo description for team "${teamName}" inspired by Avengers. Include heroic emblem design, shield-like elements, bold primary colors (red, blue, gold), dynamic action lines, and superhero aesthetic. Maximum 500 characters.`;
+    } else if (name.includes('batman') || name.includes('dark knight')) {
+      console.log('🎯 Theme detected: Batman');
+      userPrompt = `Create a logo description for team "${teamName}" inspired by Batman. Include bat silhouette, dark colors (black, dark blue, yellow accents), gothic elements, angular shapes, and mysterious night-time aesthetic. Maximum 500 characters.`;
+    } else if (name.includes('superman') || name.includes('man of steel')) {
+      console.log('🎯 Theme detected: Superman');
+      userPrompt = `Create a logo description for team "${teamName}" inspired by Superman. Include shield-like emblem, bold colors (red, blue, yellow), heroic diamond shapes, strong geometric forms, and classic superhero aesthetic. Maximum 500 characters.`;
+    } else if (name.includes('spider') && (name.includes('man') || name.includes('spider'))) {
+      console.log('🎯 Theme detected: Spider-Man');
+      userPrompt = `Create a logo description for team "${teamName}" inspired by Spider-Man. Include web patterns, spider silhouette, red and blue colors, dynamic angular lines, and urban superhero aesthetic. Maximum 500 characters.`;
+    } else if (name.includes('star wars') || name.includes('jedi') || name.includes('sith')) {
+      console.log('🎯 Theme detected: Star Wars');
+      userPrompt = `Create a logo description for team "${teamName}" inspired by Star Wars. Include lightsaber elements, galactic symbols, space colors (black, silver, blue/red glow), geometric sci-fi shapes, and epic space opera aesthetic. Maximum 500 characters.`;
+    } else if (name.includes('marvel') || name.includes('dc')) {
+      console.log('🎯 Theme detected: Comic Book Heroes');
+      userPrompt = `Create a logo description for team "${teamName}" inspired by comic book superheroes. Include bold heroic emblem, primary colors, dynamic action elements, shield or badge design, and classic superhero aesthetic. Maximum 500 characters.`;
+    } else if (name.includes('pokemon') || name.includes('pikachu')) {
+      console.log('🎯 Theme detected: Pokemon');
+      userPrompt = `Create a logo description for team "${teamName}" inspired by Pokemon. Include pokeball elements, bright vibrant colors (red, white, yellow), playful geometric shapes, lightning bolt accents, and animated adventure aesthetic. Maximum 500 characters.`;
+    } else if (name.includes('ninja') || name.includes('shinobi')) {
+      userPrompt = `Create a logo description for team "${teamName}" inspired by ninjas. Include shuriken or blade elements, dark colors (black, dark blue, silver), sharp angular shapes, stealth aesthetic, and Japanese-inspired design. Maximum 500 characters.`;
+    } else if (name.includes('pirate') || name.includes('pirates')) {
+      userPrompt = `Create a logo description for team "${teamName}" inspired by pirates. Include skull elements, crossed swords, nautical symbols, dark colors (black, red, gold), weathered textures, and adventurous maritime aesthetic. Maximum 500 characters.`;
+    } else if (name.includes('viking') || name.includes('vikings')) {
+      userPrompt = `Create a logo description for team "${teamName}" inspired by Vikings. Include horned helmet, axe or hammer elements, Nordic symbols, rugged colors (brown, gold, red), fierce warrior aesthetic, and ancient Norse design. Maximum 500 characters.`;
+    } else if (name.includes('knight') || name.includes('knights')) {
+      userPrompt = `Create a logo description for team "${teamName}" inspired by medieval knights. Include shield and sword elements, heraldic design, noble colors (blue, gold, silver), castle or crown symbols, and chivalric medieval aesthetic. Maximum 500 characters.`;
+    } else if (name.includes('wizard') || name.includes('magic') || name.includes('mage')) {
+      userPrompt = `Create a logo description for team "${teamName}" inspired by wizards and magic. Include staff or wand elements, mystical symbols, magical colors (purple, blue, gold), sparkle effects, and enchanted fantasy aesthetic. Maximum 500 characters.`;
+    } else if (name.includes('dragon') || name.includes('dragons')) {
+      userPrompt = `Create a logo description for team "${teamName}" inspired by dragons. Include dragon silhouette or head, flame elements, powerful colors (red, gold, black), scales texture, wings, and mythical fierce aesthetic. Maximum 500 characters.`;
+    } else if (name.includes('phoenix')) {
+      userPrompt = `Create a logo description for team "${teamName}" inspired by phoenix. Include bird silhouette with spread wings, flame elements, rebirth colors (red, orange, gold), feather details, and majestic rising aesthetic. Maximum 500 characters.`;
+    } else if (name.includes('wolf') || name.includes('wolves')) {
+      userPrompt = `Create a logo description for team "${teamName}" inspired by wolves. Include wolf head silhouette, pack symbols, wild colors (grey, black, blue), sharp angular features, howling pose, and fierce pack hunter aesthetic. Maximum 500 characters.`;
+    } else if (name.includes('lion') || name.includes('lions')) {
+      userPrompt = `Create a logo description for team "${teamName}" inspired by lions. Include lion head with mane, crown elements, royal colors (gold, red, brown), majestic features, strength symbols, and king of jungle aesthetic. Maximum 500 characters.`;
+    } else if (name.includes('eagle') || name.includes('eagles')) {
+      userPrompt = `Create a logo description for team "${teamName}" inspired by eagles. Include eagle head or spread wings, sharp beak and talons, patriotic colors (blue, white, gold), soaring elements, and freedom/power aesthetic. Maximum 500 characters.`;
+    } else if (name.includes('shark') || name.includes('sharks')) {
+      userPrompt = `Create a logo description for team "${teamName}" inspired by sharks. Include shark silhouette, fin elements, ocean colors (blue, grey, white), sharp teeth, water waves, and predator of the sea aesthetic. Maximum 500 characters.`;
+    } else if (name.includes('cyber') || name.includes('digital') || name.includes('tech')) {
+      userPrompt = `Create a logo description for team "${teamName}" inspired by cyberpunk/technology. Include circuit patterns, digital grid, neon colors (blue, green, purple), geometric tech shapes, glowing effects, and futuristic aesthetic. Maximum 500 characters.`;
+    } else if (name.includes('fire') || name.includes('flame') || name.includes('inferno')) {
+      userPrompt = `Create a logo description for team "${teamName}" inspired by fire elements. Include flame shapes, ember effects, hot colors (red, orange, yellow), dynamic flowing forms, heat waves, and burning intensity aesthetic. Maximum 500 characters.`;
+    } else if (name.includes('ice') || name.includes('frost') || name.includes('frozen')) {
+      userPrompt = `Create a logo description for team "${teamName}" inspired by ice elements. Include crystalline shapes, snowflake patterns, cold colors (blue, white, silver), sharp icy forms, frozen textures, and arctic aesthetic. Maximum 500 characters.`;
+    } else if (name.includes('thunder') || name.includes('lightning') || name.includes('storm')) {
+      userPrompt = `Create a logo description for team "${teamName}" inspired by thunder and lightning. Include lightning bolt shapes, storm cloud elements, electric colors (yellow, blue, white), energy crackling, and powerful weather aesthetic. Maximum 500 characters.`;
+    } else if (name.includes('fortnite') || name.includes('battle royale')) {
+      console.log('🎯 Theme detected: Fortnite/Battle Royale');
+      userPrompt = `Create a logo description for team "${teamName}" inspired by Fortnite/Battle Royale. Include shield elements, victory symbols, bright colors (blue, purple, orange), dynamic action shapes, and competitive gaming aesthetic. Maximum 500 characters.`;
+    } else if (name.includes('apex') || name.includes('legends')) {
+      userPrompt = `Create a logo description for team "${teamName}" inspired by Apex Legends. Include futuristic weapon elements, champion symbols, sci-fi colors (orange, blue, silver), angular tech shapes, and competitive shooter aesthetic. Maximum 500 characters.`;
+    } else if (name.includes('valorant') || name.includes('agents')) {
+      userPrompt = `Create a logo description for team "${teamName}" inspired by Valorant. Include tactical symbols, agent emblems, clean colors (red, blue, white), geometric precision shapes, and tactical shooter aesthetic. Maximum 500 characters.`;
+    } else if (name.includes('league') || name.includes('legends') || name.includes('lol')) {
+      console.log('🎯 Theme detected: League of Legends');
+      userPrompt = `Create a logo description for team "${teamName}" inspired by League of Legends. Include magical runes, champion symbols, fantasy colors (blue, gold, purple), mystical geometric shapes, and MOBA gaming aesthetic. Maximum 500 characters.`;
+    } else if (name.includes('dota') || name.includes('defense')) {
+      userPrompt = `Create a logo description for team "${teamName}" inspired by Dota. Include ancient symbols, hero emblems, mystical colors (red, blue, gold), runic geometric shapes, and strategic MOBA aesthetic. Maximum 500 characters.`;
+    } else if (name.includes('overwatch') || name.includes('heroes')) {
+      userPrompt = `Create a logo description for team "${teamName}" inspired by Overwatch. Include hero symbols, futuristic elements, bright colors (orange, blue, white), dynamic geometric shapes, and team shooter aesthetic. Maximum 500 characters.`;
+    } else if (name.includes('csgo') || name.includes('counter') || name.includes('strike')) {
+      userPrompt = `Create a logo description for team "${teamName}" inspired by Counter-Strike. Include tactical symbols, weapon elements, military colors (green, black, orange), precise geometric shapes, and competitive FPS aesthetic. Maximum 500 characters.`;
+    } else if (name.includes('rocket league') || name.includes('rocket')) {
+      userPrompt = `Create a logo description for team "${teamName}" inspired by Rocket League. Include car/rocket elements, ball symbols, energetic colors (blue, orange, yellow), dynamic motion shapes, and high-speed sports aesthetic. Maximum 500 characters.`;
+    } else if (name.includes('among us') || name.includes('crewmate') || name.includes('impostor')) {
+      userPrompt = `Create a logo description for team "${teamName}" inspired by Among Us. Include crewmate silhouette, space elements, vibrant colors (red, blue, green), simple geometric shapes, and space mystery aesthetic. Maximum 500 characters.`;
+    } else if (name.includes('assassin') || name.includes('creed')) {
+      userPrompt = `Create a logo description for team "${teamName}" inspired by Assassin's Creed. Include hidden blade, eagle elements, historical colors (white, red, gold), hooded silhouette, and stealth assassin aesthetic. Maximum 500 characters.`;
+    } else if (name.includes('call of duty') || name.includes('cod') || name.includes('warfare')) {
+      userPrompt = `Create a logo description for team "${teamName}" inspired by Call of Duty. Include military symbols, weapon elements, tactical colors (green, black, yellow), combat geometric shapes, and modern warfare aesthetic. Maximum 500 characters.`;
+    } else if (name.includes('halo') || name.includes('master chief') || name.includes('spartan')) {
+      userPrompt = `Create a logo description for team "${teamName}" inspired by Halo. Include spartan helmet, energy shield, sci-fi colors (blue, green, silver), futuristic geometric shapes, and space marine aesthetic. Maximum 500 characters.`;
+    } else if (name.includes('zelda') || name.includes('link') || name.includes('triforce')) {
+      userPrompt = `Create a logo description for team "${teamName}" inspired by Legend of Zelda. Include triforce symbol, sword and shield, adventure colors (green, gold, blue), mystical geometric shapes, and heroic fantasy aesthetic. Maximum 500 characters.`;
+    } else if (name.includes('mario') || name.includes('nintendo')) {
+      userPrompt = `Create a logo description for team "${teamName}" inspired by Super Mario. Include power-up elements, coin symbols, playful colors (red, blue, yellow), fun geometric shapes, and classic gaming aesthetic. Maximum 500 characters.`;
+    } else if (name.includes('sonic') || name.includes('hedgehog')) {
+      userPrompt = `Create a logo description for team "${teamName}" inspired by Sonic. Include speed rings, spiky elements, energetic colors (blue, red, yellow), dynamic motion shapes, and high-speed gaming aesthetic. Maximum 500 characters.`;
+    } else {
+      console.log('🎯 No specific theme detected, using generic analysis');
+    }
+
+    const response = await axios.post(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        model: 'gpt-3.5-turbo',
+        messages: [
+          {
+            role: 'system',
+            content: systemPrompt
+          },
+          {
+            role: 'user',
+            content: userPrompt
+          }
+        ],
+        max_tokens: 150,
+        temperature: 0.8
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const autoDescription = response.data.choices[0].message.content.trim();
+    console.log('🤖 Auto-generated logo description:', autoDescription);
+    return autoDescription;
+  } catch (error) {
+    console.error('Error generating auto logo description:', error);
+    return null; // Fallback to original logic
+  }
+};
+
+// Helper function to analyze team name and generate relevant prompts
+const generateSmartPrompts = async (teamName, eventName, logoDescription) => {
+  const name = teamName.toLowerCase();
+  
+  // Generate context-aware prompts
+  const baseContext = `Design a professional team logo for "${teamName}". NO TEXT, NO LETTERS, NO NUMBERS - logo symbol only.`;
+  
+  // If custom description is provided, use it as primary guidance
+  if (logoDescription && logoDescription.trim()) {
+    const customDescription = logoDescription.trim();
+    console.log('🎯 Using custom logo description:', customDescription);
+    
+    return [
+      `${baseContext} ${customDescription} Create a modern, professional design that incorporates these specific style elements. Use bold colors and clean geometric shapes that work well at any size.`,
+      
+      `${baseContext} ${customDescription} Design a sleek, contemporary logo that balances these style requirements with team spirit. Focus on visual impact and memorable design elements.`,
+      
+      `${baseContext} ${customDescription} Create a minimalist yet powerful emblem that reflects these design preferences. The logo should be instantly recognizable and scalable across all media.`
+    ];
+  }
+  
+  // Try to generate automatic description using OpenAI
+  const autoDescription = await generateAutoLogoDescription(teamName, eventName);
+  if (autoDescription) {
+    console.log('🤖 Using AI-generated logo description:', autoDescription);
+    
+    return [
+      `${baseContext} ${autoDescription} Create a modern, professional design that incorporates these specific style elements. Use bold colors and clean geometric shapes that work well at any size.`,
+      
+      `${baseContext} ${autoDescription} Design a sleek, contemporary logo that balances these style requirements with team spirit. Focus on visual impact and memorable design elements.`,
+      
+      `${baseContext} ${autoDescription} Create a minimalist yet powerful emblem that reflects these design preferences. The logo should be instantly recognizable and scalable across all media.`
+    ];
+  }
+  
+  // Fallback to original theme-based logic if auto-description fails
+  console.log('📝 Falling back to theme-based analysis');
+  
+  // Analyze team name for themes and concepts (original logic)
+  const themes = {
+    animals: ['wolf', 'wolves', 'lion', 'lions', 'tiger', 'tigers', 'eagle', 'eagles', 'bear', 'bears', 'shark', 'sharks', 'dragon', 'dragons', 'phoenix', 'falcon', 'hawk', 'panther', 'leopard', 'rhino', 'bull', 'ram', 'viper', 'cobra', 'fox', 'foxes'],
+    colors: ['red', 'blue', 'green', 'yellow', 'black', 'white', 'orange', 'purple', 'silver', 'gold', 'crimson', 'azure', 'emerald', 'violet'],
+    elements: ['fire', 'water', 'earth', 'air', 'ice', 'storm', 'thunder', 'lightning', 'flame', 'frost', 'wind'],
+    weapons: ['sword', 'blade', 'arrow', 'shield', 'hammer', 'axe', 'spear', 'dagger'],
+    space: ['star', 'stars', 'moon', 'sun', 'comet', 'meteor', 'galaxy', 'cosmic', 'stellar', 'nova'],
+    tech: ['cyber', 'digital', 'pixel', 'code', 'matrix', 'binary', 'quantum', 'neural', 'tech', 'bot', 'ai'],
+    mythical: ['titan', 'titans', 'god', 'gods', 'legend', 'legends', 'myth', 'hero', 'heroes', 'knight', 'knights', 'guardian', 'guardians'],
+    speed: ['lightning', 'flash', 'swift', 'rapid', 'quick', 'fast', 'velocity', 'turbo', 'sonic'],
+    power: ['force', 'power', 'strength', 'might', 'fury', 'rage', 'storm', 'thunder', 'impact', 'blast']
+  };
+  
+  // Find matching themes
+  const matchedThemes = [];
+  for (const [category, keywords] of Object.entries(themes)) {
+    for (const keyword of keywords) {
+      if (name.includes(keyword)) {
+        matchedThemes.push({ category, keyword, relevance: keyword.length / name.length });
+      }
+    }
+  }
+  
+  // Sort by relevance (longer matches = more relevant)
+  matchedThemes.sort((a, b) => b.relevance - a.relevance);
+  
+  let prompts = [];
+  
+  if (matchedThemes.length > 0) {
+    const primaryTheme = matchedThemes[0];
+    
+    // Theme-specific prompts
+    switch (primaryTheme.category) {
+      case 'animals':
+        prompts = [
+          `${baseContext} Create a stylized, geometric ${primaryTheme.keyword} head or silhouette using bold, angular shapes. Use powerful colors like deep blue, crimson red, and gold. The design should be fierce, modern, and instantly recognizable - think professional sports team logo.`,
+          
+          `${baseContext} Design an abstract emblem inspired by a ${primaryTheme.keyword}'s characteristics (strength, speed, cunning). Use dynamic geometric patterns and sharp lines in a striking color palette. Focus on the essence and power of the ${primaryTheme.keyword}, not literal representation.`,
+          
+          `${baseContext} Create a minimalist, iconic symbol that captures the spirit of a ${primaryTheme.keyword}. Use clean geometric forms, negative space, and maximum 3 colors. The logo should work as a small app icon while conveying the ${primaryTheme.keyword}'s key traits.`
+        ];
+        break;
+        
+      case 'elements':
+        prompts = [
+          `${baseContext} Design a dynamic ${primaryTheme.keyword} symbol using flowing, energetic shapes. Use appropriate colors (${primaryTheme.keyword === 'fire' ? 'orange, red, yellow' : primaryTheme.keyword === 'water' ? 'blue, cyan, teal' : primaryTheme.keyword === 'earth' ? 'brown, green, gold' : 'silver, white, blue'}). The logo should feel powerful and elemental.`,
+          
+          `${baseContext} Create an abstract geometric interpretation of ${primaryTheme.keyword}. Use angular, crystalline shapes that suggest ${primaryTheme.keyword}'s energy and movement. Bold, contrasting colors that convey the raw power of this element.`,
+          
+          `${baseContext} Design a clean, modern emblem that symbolizes ${primaryTheme.keyword} through smart geometric abstraction. Minimal color palette, maximum visual impact. Think tech company meets elemental force.`
+        ];
+        break;
+        
+      case 'tech':
+        prompts = [
+          `${baseContext} Create a futuristic, high-tech logo with circuit-like patterns, geometric grids, or digital elements. Use electric blue, neon green, and silver. The design should feel cutting-edge and technological - think tech startup or gaming brand.`,
+          
+          `${baseContext} Design a sleek, digital-inspired emblem using hexagonal patterns, angular lines, or abstract data visualization elements. Modern color scheme with gradients. The logo should scream innovation and digital expertise.`,
+          
+          `${baseContext} Create a minimalist tech logo using clean geometric shapes that suggest connectivity, data flow, or digital networks. Monochromatic or limited color palette. Professional, scalable, and distinctly modern.`
+        ];
+        break;
+        
+      case 'space':
+        prompts = [
+          `${baseContext} Design a cosmic-inspired logo featuring stellar shapes, orbital patterns, or celestial geometry. Use deep space colors: navy blue, purple, silver, and bright accents. The design should feel vast, mysterious, and powerful.`,
+          
+          `${baseContext} Create an astronomical emblem using abstract representations of ${primaryTheme.keyword}s, orbits, or cosmic phenomena. Bold geometric forms with a space-age color palette. Think NASA meets gaming team.`,
+          
+          `${baseContext} Design a clean, modern space symbol using minimal geometric shapes that suggest the cosmos. Limited color palette with high contrast. The logo should work at any size and feel both scientific and powerful.`
+        ];
+        break;
+        
+      default:
+        // Generic but team-name-aware prompts
+        prompts = [
+          `${baseContext} The name "${teamName}" suggests ${primaryTheme.keyword} - create a logo that captures this concept through bold, geometric shapes and powerful colors. Modern, professional, and immediately recognizable.`,
+          
+          `${baseContext} Design an abstract emblem inspired by the concept of "${primaryTheme.keyword}" from the team name. Use dynamic shapes and striking colors that convey strength and unity. Think professional sports or e-sports branding.`,
+          
+          `${baseContext} Create a minimalist symbol that represents the essence of "${teamName}". Clean geometric forms, smart use of negative space, and a refined color palette. The logo should be memorable and scalable.`
+        ];
+    }
+  } else {
+    // Fallback prompts for names without clear themes
+    const words = teamName.split(/\s+/);
+    const firstWord = words[0];
+    const hasMultipleWords = words.length > 1;
+    
+    prompts = [
+      `${baseContext} Create a dynamic logo inspired by the name "${teamName}". Use bold geometric shapes, strong typography-inspired elements (but NO actual letters), and a powerful color scheme. The design should feel energetic and competitive.`,
+      
+      `${baseContext} Design an abstract emblem that captures the spirit and personality suggested by "${teamName}". Use angular, modern shapes and vibrant colors. Think professional team branding with a unique twist.`,
+      
+      `${baseContext} Create a clean, iconic symbol that could represent a team called "${teamName}". Focus on geometric harmony, smart color choices, and instant recognizability. The logo should work across all media.`
+    ];
+    
+    // Add specific elements based on name structure
+    if (hasMultipleWords) {
+      prompts[0] += ` Consider how "${firstWord}" and the other parts of the name could inspire complementary design elements.`;
+    }
+  }
+  
+  return prompts;
+};
+
 // Generate AI logo options with live updates
 router.post('/generate-logo', async (req, res) => {
   try {
-    const { teamName, eventName, socketId } = req.body;
+    const { teamName, eventName, logoDescription, socketId } = req.body;
 
     if (!teamName) {
       return res.status(400).json({ error: 'Team name is required' });
@@ -93,25 +370,49 @@ router.post('/generate-logo', async (req, res) => {
     // Get io instance from app
     const { io } = require('../index');
 
-    // Create 3 different prompt variations for variety
-    const prompts = [
-      `Design a modern, professional logo for the team "${teamName}", participating in "${eventName || 'a gaming event'}". This is a logo design only — no text, no letters, no numbers, no scenes. Use clean, balanced geometric shapes and vibrant, contrasting colors that look great on both light and dark backgrounds. The logo should be simple, scalable, and immediately recognizable at small sizes. Think tech company branding or app icon — focus on symmetry, clarity, and visual impact.`,
+    // Generate dynamic style descriptions based on team name analysis
+    const getStyleDescriptions = (teamName) => {
+      const name = teamName.toLowerCase();
+      
+      // Check for themes to customize style descriptions
+      if (name.includes('wolf') || name.includes('wolves') || name.includes('lion') || name.includes('tiger') || name.includes('bear') || name.includes('eagle') || name.includes('dragon')) {
+        return ['Kraftvoll & Majestätisch', 'Dynamisch & Furchtlos', 'Elegant & Symbolisch'];
+      } else if (name.includes('fire') || name.includes('flame') || name.includes('storm') || name.includes('thunder') || name.includes('lightning')) {
+        return ['Energetisch & Elementar', 'Kraftvoll & Explosiv', 'Abstrakt & Fließend'];
+      } else if (name.includes('cyber') || name.includes('digital') || name.includes('tech') || name.includes('matrix') || name.includes('quantum')) {
+        return ['Futuristisch & Tech', 'Digital & Innovativ', 'Minimalistisch & Smart'];
+      } else if (name.includes('star') || name.includes('cosmic') || name.includes('galaxy') || name.includes('nova') || name.includes('stellar')) {
+        return ['Kosmisch & Mysteriös', 'Stellare & Kraftvoll', 'Elegant & Unendlich'];
+      } else {
+        return ['Professionell & Modern', 'Dynamisch & Kraftvoll', 'Minimalistisch & Clever'];
+      }
+    };
     
-      `Create a powerful team logo for "${teamName}" in "${eventName || 'a gaming event'}". Design an angular, bold emblem or badge-style logo using sharp geometric forms and a dynamic color scheme (e.g., red, black, gold, electric blue). Avoid text, numbers, or letters — logo only. The design should convey energy, strength, and competitive spirit. Think professional e-sports or sports franchise identity — simple, striking, and printable on merch.`,
-    
-      `Design a minimalist, symbolic logo for team "${teamName}", competing in "${eventName || 'a gaming event'}". Use abstract geometric forms, subtle negative space, and a limited, refined color palette (max 3 colors). No text, letters, or decorative details — just a clean, elegant icon that scales well and works as a favicon, app logo, or tech brand mark. Focus on simplicity, clever shape composition, and brand-level clarity.`
-    ];
+    const styleDescriptions = getStyleDescriptions(teamName);
 
-    console.log('🎨 Generating 3 AI logo options for team:', teamName);
-
-    // Send initial status
+    // Send initial status with appropriate message
     if (socketId && io) {
+      const initialMessage = logoDescription && logoDescription.trim() 
+        ? `Analysiere "${teamName}" und generiere passende Logos...`
+        : `Analysiere "${teamName}", generiere Beschreibung und erstelle Logos...`;
+        
       io.to(socketId).emit('logo-generation-status', {
         status: 'started',
-        message: 'Logo-Generierung gestartet...',
+        message: initialMessage,
         progress: 0,
         total: 3
       });
+    }
+
+    // Generate smart, context-aware prompts based on team name and optional description
+    const prompts = await generateSmartPrompts(teamName, eventName, logoDescription);
+
+    if (logoDescription && logoDescription.trim()) {
+      console.log('🎨 Generating 3 AI logo options for team:', teamName);
+      console.log('🎯 Using custom logo description:', logoDescription.trim());
+    } else {
+      console.log('🎨 Generating 3 AI logo options for team:', teamName);
+      console.log('🤖 Using AI-generated description or theme-based analysis');
     }
 
     // Generate all 3 logos in parallel for much faster processing
@@ -124,7 +425,7 @@ router.post('/generate-logo', async (req, res) => {
             message: `Generiere alle 3 Logos parallel...`,
             progress: 0,
             total: 3,
-            currentStyle: ['Modern & Professional', 'Dynamic & Bold', 'Minimalist & Clean'][i]
+            currentStyle: styleDescriptions[i]
           });
         }
 
@@ -154,7 +455,8 @@ router.post('/generate-logo', async (req, res) => {
           responseType: 'arraybuffer'
         });
 
-        const fileName = `logo_${eventName ? eventName.replace(/[^a-zA-Z0-9]/g, '_') : 'event'}_${teamName.replace(/[^a-zA-Z0-9]/g, '_')}_v${i + 1}.png`;
+        const timestamp = Date.now();
+        const fileName = `logo_${eventName ? eventName.replace(/[^a-zA-Z0-9]/g, '_') : 'event'}_${teamName.replace(/[^a-zA-Z0-9]/g, '_')}_v${i + 1}_${timestamp}.png`;
         const filePath = path.join(logosDir, fileName);
 
         await fs.writeFile(filePath, imageResponse.data);
@@ -164,7 +466,7 @@ router.post('/generate-logo', async (req, res) => {
         const logoOption = {
           id: i + 1,
           url: logoUrl,
-          style: ['Modern & Professional', 'Dynamic & Bold', 'Minimalist & Clean'][i]
+          style: styleDescriptions[i]
         };
 
         console.log(`✅ AI logo option ${i + 1} generated and saved:`, logoUrl);

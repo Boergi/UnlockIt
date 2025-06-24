@@ -985,7 +985,7 @@ const EventManagement = () => {
                             <div className="text-center">
                               <p className="text-white text-sm font-medium">Generiert parallel...</p>
                               <p className="text-gray-400 text-xs mt-1">
-                                {['Modern & Professional', 'Dynamic & Bold', 'Minimalist & Clean'][id - 1]}
+                                Erstelle individuelles Logo basierend auf Teamnamen...
                               </p>
                             </div>
                           </div>
@@ -1003,7 +1003,7 @@ const EventManagement = () => {
                       <div className="text-center mb-4">
                         <h4 className="text-white font-medium mb-1">Option {id}</h4>
                         <p className="text-gray-400 text-sm">
-                          {option ? option.style : ['Modern & Professional', 'Dynamic & Bold', 'Minimalist & Clean'][id - 1]}
+                          {option ? option.style : `Stil ${id} - Angepasst an "${currentTeamForLogo?.name}"`}
                         </p>
                       </div>
                       <button
