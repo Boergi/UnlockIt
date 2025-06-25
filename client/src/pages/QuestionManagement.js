@@ -567,7 +567,7 @@ const QuestionManagement = () => {
                         
                         <div className="flex items-center space-x-3">
                           <div className="px-4 py-2 bg-red-600 text-white rounded-md font-medium">
-                            Tipp 3 (Lösung)
+                            Lösung
                           </div>
                           <div className="flex-1 p-3 bg-black/30 rounded-md">
                             <p className="text-green-400 font-medium">{previewQuestion.solution}</p>

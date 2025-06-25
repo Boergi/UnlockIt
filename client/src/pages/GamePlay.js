@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useSocket } from '../contexts/SocketContext';
 import axios from 'axios';
 import toast from 'react-hot-toast';
-import { Lock, Clock, Lightbulb, Send, CheckCircle, XCircle, Trophy } from 'lucide-react';
+import { Lock, Clock, Lightbulb, Send, CheckCircle, XCircle, Trophy, ArrowLeft } from 'lucide-react';
 
 const GamePlay = () => {
   const { teamId } = useParams();
@@ -81,10 +81,10 @@ const GamePlay = () => {
   }, [timeLeft, currentQuestion, gameCompleted, questionCompleted, completeQuestion]);
 
   // Load team score and position via Socket.IO
-  const loadTeamScoreAndPosition = () => {
+  const loadTeamScoreAndPosition = useCallback(() => {
     if (!team) return;
     requestLiveData('scoreboard', { eventId: team.event_id });
-  };
+  }, [team, requestLiveData]);
 
   useEffect(() => {
     if (team) {
@@ -369,6 +369,21 @@ const GamePlay = () => {
   return (
     <div className="min-h-screen p-4">
       <div className="max-w-4xl mx-auto">
+        {/* Back Button */}
+        <div className="mb-4">
+          <button
+            onClick={() => {
+              const teamIdentifier = team?.uuid || team?.id;
+              const eventIdentifier = team?.event_uuid || team?.event_id;
+              navigate(`/team/${teamIdentifier}/event/${eventIdentifier}`);
+            }}
+            className="flex items-center text-gray-400 hover:text-white transition-colors duration-200"
+          >
+            <ArrowLeft className="w-5 h-5 mr-2" />
+            Zurück zur Team-Seite
+          </button>
+        </div>
+
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-white mb-2">
@@ -463,7 +478,7 @@ const GamePlay = () => {
                             : 'bg-blue-600 hover:bg-blue-700 text-white'
                         }`}
                       >
-                        Tipp {tipNum} {tipNum === 3 && '(Lösung)'}
+                        {tipNum === 3 ? 'Lösung' : `Tipp ${tipNum}`}
                       </button>
                       
                       {tips[tipNum - 1] && (
