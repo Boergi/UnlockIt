@@ -125,14 +125,16 @@ const EventManagement = () => {
       const eventsWithStats = await Promise.all(
         eventsResponse.data.map(async (event) => {
           try {
-            const statsResponse = await axios.get(`/api/events/${event.id}/stats`);
+            const eventIdentifier = event.uuid || event.id;
+            const statsResponse = await axios.get(`/api/events/${eventIdentifier}/stats`);
             return {
               ...event,
               teamCount: statsResponse.data.teams || 0,
               questionCount: statsResponse.data.questions || 0
             };
           } catch (error) {
-            console.error('Error fetching stats for event:', event.id, error);
+            const eventIdentifier = event.uuid || event.id;
+            console.error('Error fetching stats for event:', eventIdentifier, error);
             return {
               ...event,
               teamCount: 0,
@@ -195,7 +197,8 @@ const EventManagement = () => {
 
   const handleManageQuestions = async (event) => {
     try {
-      const response = await axios.get(`/api/events/${event.id}/questions/admin`);
+      const eventIdentifier = event.uuid || event.id;
+      const response = await axios.get(`/api/events/${eventIdentifier}/questions/admin`);
       setSelectedQuestions(response.data.map(q => q.id));
       setShowQuestionSelector(event);
     } catch (error) {
@@ -216,7 +219,8 @@ const EventManagement = () => {
     const loadingToast = toast.loading('Fragen werden gespeichert...');
 
     try {
-      await axios.post(`/api/events/${showQuestionSelector.id}/questions`, {
+      const eventIdentifier = showQuestionSelector.uuid || showQuestionSelector.id;
+      await axios.post(`/api/events/${eventIdentifier}/questions`, {
         questionIds: selectedQuestions
       });
       toast.success('Fragen erfolgreich zugeordnet!', { id: loadingToast });
