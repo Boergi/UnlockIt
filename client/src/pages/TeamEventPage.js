@@ -354,7 +354,9 @@ const TeamEventPage = () => {
 
   const goToGamePlay = () => {
     if (currentQuestion) {
-      navigate(`/play/${teamId}`);
+      // Use the team's UUID from the loaded team object, not from URL params
+      const teamIdentifier = team?.uuid || team?.id;
+      navigate(`/play/${teamIdentifier}`);
     }
   };
 
@@ -618,7 +620,11 @@ const TeamEventPage = () => {
                     <h2 className="text-xl font-bold text-white">Nächste Frage starten</h2>
                   </div>
                   <button
-                    onClick={() => navigate(`/play/${teamId}`)}
+                    onClick={() => {
+                      // Use the team's UUID from the loaded team object, not from URL params
+                      const teamIdentifier = team?.uuid || team?.id;
+                      navigate(`/play/${teamIdentifier}`);
+                    }}
                     className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
                   >
                     <span>Frage starten</span>

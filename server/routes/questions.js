@@ -254,4 +254,220 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// Copy questions from one event to another
+router.post('/copy-from-event', authenticateToken, async (req, res) => {
+  try {
+    const { sourceEventId, targetEventId, questionIds } = req.body;
+
+    if (!sourceEventId || !targetEventId) {
+      return res.status(400).json({ error: 'Source and target event IDs are required' });
+    }
+
+    // Get source and target events
+    const sourceEvent = await getEventByIdOrUuid(sourceEventId);
+    const targetEvent = await getEventByIdOrUuid(targetEventId);
+
+    if (!sourceEvent || !targetEvent) {
+      return res.status(404).json({ error: 'Source or target event not found' });
+    }
+
+    let questionsToAssign;
+
+    if (questionIds && questionIds.length > 0) {
+      // Copy specific questions
+      questionsToAssign = await knex('event_questions')
+        .join('questions', 'event_questions.question_id', 'questions.id')
+        .where(function() {
+          if (sourceEvent.uuid) {
+            this.where('event_questions.event_uuid', sourceEvent.uuid);
+          } else {
+            this.where('event_questions.event_id', sourceEvent.id);
+          }
+        })
+        .whereIn('questions.id', questionIds)
+        .select('questions.id', 'event_questions.order_index')
+        .orderBy('event_questions.order_index');
+    } else {
+      // Copy all questions from source event
+      questionsToAssign = await knex('event_questions')
+        .join('questions', 'event_questions.question_id', 'questions.id')
+        .where(function() {
+          if (sourceEvent.uuid) {
+            this.where('event_questions.event_uuid', sourceEvent.uuid);
+          } else {
+            this.where('event_questions.event_id', sourceEvent.id);
+          }
+        })
+        .select('questions.id', 'event_questions.order_index')
+        .orderBy('event_questions.order_index');
+    }
+
+    if (questionsToAssign.length === 0) {
+      return res.status(400).json({ error: 'No questions found to copy' });
+    }
+
+    // Get the highest order_index in target event
+    const maxOrderResult = await knex('event_questions')
+      .where(function() {
+        if (targetEvent.uuid) {
+          this.where('event_uuid', targetEvent.uuid);
+        } else {
+          this.where('event_id', targetEvent.id);
+        }
+      })
+      .max('order_index as maxOrder')
+      .first();
+
+    let nextOrderIndex = (maxOrderResult?.maxOrder || 0) + 1;
+
+    // Insert questions into target event
+    const insertPromises = questionsToAssign.map(async (question) => {
+      // Check if question is already assigned to target event
+      const existing = await knex('event_questions')
+        .where('question_id', question.id)
+        .where(function() {
+          if (targetEvent.uuid) {
+            this.where('event_uuid', targetEvent.uuid);
+          } else {
+            this.where('event_id', targetEvent.id);
+          }
+        })
+        .first();
+
+      if (!existing) {
+        return knex('event_questions').insert({
+          event_id: targetEvent.id,
+          event_uuid: targetEvent.uuid,
+          question_id: question.id,
+          order_index: nextOrderIndex++
+        });
+      }
+      return null;
+    });
+
+    const results = await Promise.all(insertPromises);
+    const addedCount = results.filter(r => r !== null).length;
+
+    res.json({
+      message: `Successfully copied ${addedCount} questions to target event`,
+      addedCount,
+      skippedCount: questionsToAssign.length - addedCount
+    });
+
+  } catch (error) {
+    console.error('Copy questions error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get all questions available for assignment (not just assigned to current event)
+router.get('/available/:eventId', authenticateToken, async (req, res) => {
+  try {
+    const event = await getEventByIdOrUuid(req.params.eventId);
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    // Get all questions
+    const allQuestions = await knex('questions')
+      .select('*')
+      .orderBy('created_at', 'desc');
+
+    // Get questions already assigned to this event
+    const assignedQuestions = await knex('event_questions')
+      .where(function() {
+        if (event.uuid) {
+          this.where('event_uuid', event.uuid);
+        } else {
+          this.where('event_id', event.id);
+        }
+      })
+      .select('question_id');
+
+    const assignedIds = assignedQuestions.map(eq => eq.question_id);
+
+    // Mark questions as assigned or available
+    const questionsWithStatus = allQuestions.map(question => ({
+      ...question,
+      isAssigned: assignedIds.includes(question.id),
+      // Remove sensitive data
+      solution: undefined
+    }));
+
+    res.json(questionsWithStatus);
+
+  } catch (error) {
+    console.error('Get available questions error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Assign multiple questions to an event at once
+router.post('/assign-multiple', authenticateToken, async (req, res) => {
+  try {
+    const { eventId, questionIds } = req.body;
+
+    if (!eventId || !questionIds || !Array.isArray(questionIds)) {
+      return res.status(400).json({ error: 'Event ID and question IDs array are required' });
+    }
+
+    const event = await getEventByIdOrUuid(eventId);
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    // Get the highest order_index for this event
+    const maxOrderResult = await knex('event_questions')
+      .where(function() {
+        if (event.uuid) {
+          this.where('event_uuid', event.uuid);
+        } else {
+          this.where('event_id', event.id);
+        }
+      })
+      .max('order_index as maxOrder')
+      .first();
+
+    let nextOrderIndex = (maxOrderResult?.maxOrder || 0) + 1;
+
+    // Insert each question
+    const insertPromises = questionIds.map(async (questionId) => {
+      // Check if already assigned
+      const existing = await knex('event_questions')
+        .where('question_id', questionId)
+        .where(function() {
+          if (event.uuid) {
+            this.where('event_uuid', event.uuid);
+          } else {
+            this.where('event_id', event.id);
+          }
+        })
+        .first();
+
+      if (!existing) {
+        return knex('event_questions').insert({
+          event_id: event.id,
+          event_uuid: event.uuid,
+          question_id: questionId,
+          order_index: nextOrderIndex++
+        });
+      }
+      return null;
+    });
+
+    const results = await Promise.all(insertPromises);
+    const addedCount = results.filter(r => r !== null).length;
+
+    res.json({
+      message: `Successfully assigned ${addedCount} questions to event`,
+      addedCount,
+      skippedCount: questionIds.length - addedCount
+    });
+
+  } catch (error) {
+    console.error('Assign multiple questions error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 module.exports = router; 
