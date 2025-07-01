@@ -1,9 +1,83 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSocket } from '../contexts/SocketContext';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import { Lock, Clock, Lightbulb, Send, CheckCircle, XCircle, Trophy, ArrowLeft } from 'lucide-react';
+
+// Global tracker to prevent duplicate question starts
+const startedQuestions = new Set();
+
+// Global lock to prevent any question starts for a team
+const teamStartLocks = new Map();
+
+// Global session-based lock to prevent multiple mounts from starting questions
+const sessionStartLocks = new Map();
+
+// Helper function to acquire team start lock
+const acquireTeamStartLock = (teamId) => {
+  const lockKey = `team-${teamId}`;
+  if (teamStartLocks.has(lockKey)) {
+    console.log('🚫 Team start lock already exists for team:', teamId);
+    return false;
+  }
+  console.log('🔒 Acquiring team start lock for team:', teamId);
+  teamStartLocks.set(lockKey, Date.now());
+  return true;
+};
+
+// Helper function to acquire session start lock (survives component unmount/mount)
+const acquireSessionStartLock = (teamId) => {
+  const sessionKey = `session-${teamId}`;
+  const now = Date.now();
+  
+  if (sessionStartLocks.has(sessionKey)) {
+    const lockTime = sessionStartLocks.get(sessionKey);
+    // Only allow if lock is older than 5 seconds
+    if (now - lockTime < 5000) {
+      console.log('🚫 Session start lock exists for team:', teamId, 'Age:', now - lockTime, 'ms');
+      return false;
+    } else {
+      console.log('🕐 Session start lock expired, acquiring new one for team:', teamId);
+    }
+  }
+  
+  console.log('🔒 Acquiring session start lock for team:', teamId);
+  sessionStartLocks.set(sessionKey, now);
+  return true;
+};
+
+// Helper function to release team start lock
+const releaseTeamStartLock = (teamId) => {
+  const lockKey = `team-${teamId}`;
+  if (teamStartLocks.has(lockKey)) {
+    console.log('🔓 Releasing team start lock for team:', teamId);
+    teamStartLocks.delete(lockKey);
+  }
+};
+
+// Auto-release locks after timeout to prevent permanent locks
+setInterval(() => {
+  const now = Date.now();
+  const TEAM_LOCK_TIMEOUT = 30000; // 30 seconds
+  const SESSION_LOCK_TIMEOUT = 10000; // 10 seconds
+  
+  // Release expired team locks
+  for (const [lockKey, timestamp] of teamStartLocks.entries()) {
+    if (now - timestamp > TEAM_LOCK_TIMEOUT) {
+      console.log('🕐 Auto-releasing expired team start lock:', lockKey);
+      teamStartLocks.delete(lockKey);
+    }
+  }
+  
+  // Release expired session locks
+  for (const [sessionKey, timestamp] of sessionStartLocks.entries()) {
+    if (now - timestamp > SESSION_LOCK_TIMEOUT) {
+      console.log('🕐 Auto-releasing expired session start lock:', sessionKey);
+      sessionStartLocks.delete(sessionKey);
+    }
+  }
+}, 5000); // Check every 5 seconds
 
 const GamePlay = () => {
   const { teamId } = useParams();
@@ -25,14 +99,51 @@ const GamePlay = () => {
   const [availableTips, setAvailableTips] = useState([]);
   const [questionCompleted, setQuestionCompleted] = useState(false);
   const [completionReason, setCompletionReason] = useState(null);
+  const [completingQuestion, setCompletingQuestion] = useState(false);
+  const [loadingGame, setLoadingGame] = useState(false);
+  const [startingQuestion, setStartingQuestion] = useState(false);
+  const hasInitialized = useRef(false);
 
+  // Store the original teamId to prevent re-runs on parameter changes
+  const originalTeamIdRef = useRef(teamId);
+  
   useEffect(() => {
+    console.log('🔄 useEffect triggered for teamId:', teamId, 'originalTeamId:', originalTeamIdRef.current, 'hasInitialized:', hasInitialized.current);
+    
+    // Prevent multiple initialization calls
+    if (hasInitialized.current) {
+      console.log('🚫 GamePlay already initialized, skipping...');
+      return;
+    }
+    
+    console.log('🎮 Initializing GamePlay for teamId:', teamId);
+    hasInitialized.current = true;
+    originalTeamIdRef.current = teamId;
     loadTeamAndQuestion();
-  }, [teamId]);
+    
+    // Cleanup function to reset on unmount
+    return () => {
+      console.log('🧹 GamePlay component unmounting, resetting initialization flag');
+      hasInitialized.current = false;
+      // Clear any started questions for this team
+      const teamQuestions = Array.from(startedQuestions).filter(key => 
+        key.endsWith(`-${teamId}`) || key.endsWith(`-${originalTeamIdRef.current}`)
+      );
+      teamQuestions.forEach(key => startedQuestions.delete(key));
+      // Release team start lock
+      releaseTeamStartLock(teamId);
+      releaseTeamStartLock(originalTeamIdRef.current);
+      console.log('🧹 Cleared started questions and released locks for team:', teamId);
+    };
+  }, []); // Remove teamId dependency to prevent re-runs
 
   // Mark question as completed (for timeout or solution tip usage)
-  const completeQuestion = useCallback(async (reason) => {
+  const completeQuestion = useCallback(async (reason, updateUI = true) => {
     if (!currentQuestion || !team) return;
+    
+    if (updateUI) {
+      setCompletingQuestion(true);
+    }
     
     try {
       await axios.post(`/api/game/question/${currentQuestion.id}/complete`, {
@@ -40,23 +151,31 @@ const GamePlay = () => {
         reason
       });
       
-      setQuestionCompleted(true);
-      setCompletionReason(reason);
-      
-      const reasonText = {
-        'timeout': 'Zeit abgelaufen',
-        'max_attempts': 'Alle Versuche aufgebraucht',
-        'solution': 'Lösung angezeigt'
-      }[reason] || reason;
-      
-      toast(`Frage abgeschlossen (${reasonText})`, {
-        icon: '⏰',
-        duration: 3000
-      });
+      if (updateUI) {
+        setQuestionCompleted(true);
+        setCompletionReason(reason);
+        
+        const reasonText = {
+          'timeout': 'Zeit abgelaufen',
+          'max_attempts': 'Alle Versuche aufgebraucht',
+          'solution': 'Lösung angezeigt'
+        }[reason] || reason;
+        
+        toast(`Frage abgeschlossen (${reasonText})`, {
+          icon: '⏰',
+          duration: 3000
+        });
+      }
       
     } catch (error) {
       console.error('Error completing question:', error);
-      toast.error('Fehler beim Abschließen der Frage');
+      if (updateUI) {
+        toast.error('Fehler beim Abschließen der Frage');
+      }
+    } finally {
+      if (updateUI) {
+        setCompletingQuestion(false);
+      }
     }
   }, [currentQuestion, team, teamId]);
 
@@ -123,19 +242,66 @@ const GamePlay = () => {
   };
 
   // Go to next question
-  const goToNextQuestion = () => {
-    setAnswer('');
-    setAttempts(0);
-    setUsedTips(0);
-    setTips([]);
-    setAvailableTips([]);
-    setQuestionCompleted(false);
-    setCompletionReason(null);
-    loadTeamAndQuestion();
+  const goToNextQuestion = async () => {
+    setCompletingQuestion(true);
+    
+    try {
+      // If the question is completed due to timeout but backend wasn't informed yet, do it now
+      if (questionCompleted && completionReason === 'timeout' && currentQuestion && team) {
+        await axios.post(`/api/game/question/${currentQuestion.id}/complete`, {
+          teamId: teamId,
+          reason: 'timeout'
+        });
+      }
+      
+      // Reset state
+      setAnswer('');
+      setAttempts(0);
+      setUsedTips(0);
+      setTips([]);
+      setAvailableTips([]);
+      setQuestionCompleted(false);
+      setCompletionReason(null);
+      setLoadingGame(false); // Reset loading state before loading next question
+      setStartingQuestion(false); // Reset starting state
+      hasInitialized.current = false; // Allow loading next question
+      
+      // Release team start lock before loading next question
+      releaseTeamStartLock(teamId);
+      
+      // Load next question
+      await loadTeamAndQuestion();
+      
+    } catch (error) {
+      console.error('Error proceeding to next question:', error);
+      toast.error('Fehler beim Wechseln zur nächsten Frage');
+    } finally {
+      setCompletingQuestion(false);
+    }
   };
 
   const loadTeamAndQuestion = async () => {
+    // Prevent multiple simultaneous calls
+    if (loadingGame) {
+      console.log('🚫 loadTeamAndQuestion already running, skipping...');
+      return;
+    }
+    
+    // Check session-level lock first (survives component unmount/mount)
+    if (!acquireSessionStartLock(teamId)) {
+      console.log('🚫 Session start lock exists, aborting loadTeamAndQuestion for teamId:', teamId);
+      return;
+    }
+    
+    // Check global team lock
+    if (!acquireTeamStartLock(teamId)) {
+      console.log('🚫 Team start lock exists, aborting loadTeamAndQuestion for teamId:', teamId);
+      return;
+    }
+    
+    setLoadingGame(true);
     try {
+      console.log('🔄 Starting loadTeamAndQuestion for teamId:', teamId);
       const teamResponse = await axios.get(`/api/teams/${teamId}`);
       setTeam(teamResponse.data);
       
@@ -186,6 +352,10 @@ const GamePlay = () => {
           
           if (remainingTime === 0) {
             toast.error('Zeit für diese Frage ist bereits abgelaufen!');
+            // Update UI immediately
+            setQuestionCompleted(true);
+            setCompletionReason('timeout');
+            // Backend will be informed when user clicks "Next Question"
           } else if (progress.attemptsUsed > 0 || progress.usedTip > 0) {
             // Only show restore message if there was actual progress
             toast('Frage wurde wiederhergestellt', {
@@ -195,10 +365,29 @@ const GamePlay = () => {
           }
         } else {
           // Fresh question - start it now
+          const questionId = questionResponse.data.id;
+          const questionKey = `${questionId}-${teamId}`;
+          
+          if (startingQuestion) {
+            console.log('🚫 Question already being started, skipping...');
+            return;
+          }
+          
+          if (startedQuestions.has(questionKey)) {
+            console.log('🚫 Question already started globally, skipping:', questionKey);
+            return;
+          }
+          
+          setStartingQuestion(true);
+          startedQuestions.add(questionKey);
+          
           try {
-            const startResponse = await axios.post(`/api/game/question/${questionResponse.data.id}/start`, {
+            console.log('🎯 Starting fresh question:', questionId, 'for team:', teamId);
+            const startResponse = await axios.post(`/api/game/question/${questionId}/start`, {
               teamId
             });
+            
+            console.log('✅ Question start response:', startResponse.data);
             
             // Set initial state
             setTimeLeft(questionResponse.data.time_limit_seconds);
@@ -206,24 +395,33 @@ const GamePlay = () => {
             setUsedTips(0);
             setTips([]);
             
-                         if (startResponse.data.existing) {
-               // Question was already started - need to calculate remaining time
-               const timeStarted = new Date(startResponse.data.timeStarted);
-               const now = new Date();
-               const elapsedSeconds = Math.floor((now - timeStarted) / 1000);
-               const remainingTime = Math.max(0, questionResponse.data.time_limit_seconds - elapsedSeconds);
-               
-
-               
-               setTimeLeft(remainingTime);
-               
-               if (remainingTime === 0) {
-                 toast.error('Zeit für diese Frage ist bereits abgelaufen!');
-               }
-             }
+            if (startResponse.data.existing) {
+              console.log('📋 Question was already started, calculating remaining time');
+              // Question was already started - need to calculate remaining time
+              const timeStarted = new Date(startResponse.data.timeStarted);
+              const now = new Date();
+              const elapsedSeconds = Math.floor((now - timeStarted) / 1000);
+              const remainingTime = Math.max(0, questionResponse.data.time_limit_seconds - elapsedSeconds);
+              
+              setTimeLeft(remainingTime);
+              
+              if (remainingTime === 0) {
+                toast.error('Zeit für diese Frage ist bereits abgelaufen!');
+                // Update UI immediately
+                setQuestionCompleted(true);
+                setCompletionReason('timeout');
+                // Backend will be informed when user clicks "Next Question"
+              }
+            } else {
+              console.log('🆕 New question started successfully');
+            }
           } catch (error) {
             console.error('Error starting question:', error);
             toast.error('Fehler beim Starten der Frage');
+            // Remove from started questions on error so it can be retried
+            startedQuestions.delete(questionKey);
+          } finally {
+            setStartingQuestion(false);
           }
         }
       }
@@ -233,6 +431,8 @@ const GamePlay = () => {
       navigate('/');
     } finally {
       setLoading(false);
+      setLoadingGame(false);
+      releaseTeamStartLock(teamId);
     }
   };
 
@@ -512,10 +712,20 @@ const GamePlay = () => {
                 
                 <button
                   onClick={goToNextQuestion}
-                  className="w-full flex items-center justify-center px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-medium rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200"
+                  disabled={completingQuestion}
+                  className="w-full flex items-center justify-center px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-medium rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Send className="w-5 h-5 mr-2" />
-                  Weiter zur nächsten Frage
+                  {completingQuestion ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                      Schließe Frage ab...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-5 h-5 mr-2" />
+                      Weiter zur nächsten Frage
+                    </>
+                  )}
                 </button>
               </div>
             ) : (

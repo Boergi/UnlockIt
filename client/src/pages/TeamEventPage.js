@@ -37,6 +37,7 @@ const TeamEventPage = () => {
   const [isEventEnded, setIsEventEnded] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState('');
   const [showQrCode, setShowQrCode] = useState(false);
+  const [startingGame, setStartingGame] = useState(false);
 
   useEffect(() => {
     const initializePage = async () => {
@@ -252,9 +253,10 @@ const TeamEventPage = () => {
     setTeam(teamData);
     setEvent(eventData);
     
-    // Store in localStorage for automatic navigation - use UUIDs when available
+    // Store in localStorage for automatic navigation - use consistent identifier
+    const teamIdentifier = teamData.uuid || teamData.id;
     localStorage.setItem('currentTeam', JSON.stringify({
-      teamId: teamData.uuid || teamData.id,
+      teamId: teamIdentifier,
       eventId: eventData.uuid || eventData.id,
       teamName: teamData.name,
       eventName: eventData.name
@@ -352,18 +354,23 @@ const TeamEventPage = () => {
     setIsEventEnded(false);
   };
 
+  // Helper function to get consistent team identifier
+  const getTeamIdentifier = () => {
+    // Always use the same identifier logic to prevent parameter changes
+    return team?.uuid || team?.id || teamId;
+  };
+
   const goToGamePlay = () => {
     if (currentQuestion) {
-      // Use the team's UUID from the loaded team object, not from URL params
-      const teamIdentifier = team?.uuid || team?.id;
+      const teamIdentifier = getTeamIdentifier();
+      console.log('🎮 Navigating to GamePlay with teamIdentifier:', teamIdentifier);
       navigate(`/play/${teamIdentifier}`);
     }
   };
 
   const generateQrCode = async (teamId, eventId) => {
     try {
-      // Use UUIDs if available, fall back to IDs
-      const teamIdentifier = team?.uuid || teamId;
+      const teamIdentifier = getTeamIdentifier();
       const eventIdentifier = event?.uuid || eventId;
       const teamPageUrl = `${window.location.origin}/team/${teamIdentifier}/event/${eventIdentifier}`;
       const qrCodeDataUrl = await QRCode.toDataURL(teamPageUrl, {
@@ -381,8 +388,7 @@ const TeamEventPage = () => {
   };
 
   const copyTeamUrl = async () => {
-    // Use UUIDs if available, fall back to IDs
-    const teamIdentifier = team?.uuid || team?.id;
+    const teamIdentifier = getTeamIdentifier();
     const eventIdentifier = event?.uuid || event?.id;
     const teamPageUrl = `${window.location.origin}/team/${teamIdentifier}/event/${eventIdentifier}`;
     try {
@@ -611,8 +617,8 @@ const TeamEventPage = () => {
           <div className="space-y-6">
 
 
-            {/* Start Next Question Button - only show if no current question is active */}
-            {!currentQuestion && (
+            {/* Start Next Question Button - only show if no current question is active AND there are uncompleted questions */}
+            {!currentQuestion && teamProgress.some(q => !q.completed) && (
               <div className="bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-lg p-6 border border-blue-500/30">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center space-x-2">
@@ -621,18 +627,62 @@ const TeamEventPage = () => {
                   </div>
                   <button
                     onClick={() => {
-                      // Use the team's UUID from the loaded team object, not from URL params
-                      const teamIdentifier = team?.uuid || team?.id;
+                      if (startingGame) return;
+                      
+                      setStartingGame(true);
+                      const teamIdentifier = getTeamIdentifier();
+                      console.log('🎮 Starting new question with teamIdentifier:', teamIdentifier);
                       navigate(`/play/${teamIdentifier}`);
+                      
+                      // Reset after navigation
+                      setTimeout(() => setStartingGame(false), 2000);
                     }}
-                    className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                    disabled={startingGame}
+                    className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <span>Frage starten</span>
-                    <ArrowRight className="w-4 h-4" />
+                    {startingGame ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        <span>Starte...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Frage starten</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
                   </button>
                 </div>
                 <div className="bg-white/10 rounded-lg p-4">
                   <p className="text-white">Klicke hier, um die nächste Frage zu starten. Die Frage wird erst angezeigt, nachdem du sie über das GamePlay geöffnet hast.</p>
+                </div>
+              </div>
+            )}
+
+            {/* All Questions Completed Message */}
+            {!currentQuestion && teamProgress.length > 0 && teamProgress.every(q => q.completed) && (
+              <div className="bg-gradient-to-r from-green-500/20 to-emerald-500/20 rounded-lg p-6 border border-green-500/30">
+                <div className="text-center">
+                  <Trophy className="w-16 h-16 text-yellow-400 mx-auto mb-4" />
+                  <h2 className="text-2xl font-bold text-white mb-4">Alle Fragen abgeschlossen! 🎉</h2>
+                  <p className="text-gray-300 mb-6">
+                    Herzlichen Glückwunsch! Ihr habt alle verfügbaren Fragen bearbeitet.
+                  </p>
+                  <div className="bg-white/10 rounded-lg p-4 mb-4">
+                    <div className="text-3xl font-bold text-yellow-400 mb-2">
+                      {teamProgress.reduce((sum, q) => sum + (q.points_awarded || 0), 0)} Punkte
+                    </div>
+                    <div className="text-gray-300">
+                      {teamProgress.filter(q => q.correct).length} von {teamProgress.length} Fragen richtig gelöst
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => window.open(`/scoreboard/${event?.uuid || eventId}`, '_blank')}
+                    className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-yellow-500 to-amber-600 hover:from-yellow-600 hover:to-amber-700 text-white font-medium rounded-lg transition-all duration-200"
+                  >
+                    <Trophy className="w-5 h-5 mr-2" />
+                    Scoreboard anzeigen
+                  </button>
                 </div>
               </div>
             )}
@@ -647,11 +697,26 @@ const TeamEventPage = () => {
                     <span className="text-xs bg-green-600 text-white px-2 py-1 rounded-full">In Bearbeitung</span>
                   </div>
                   <button
-                    onClick={goToGamePlay}
-                    className="flex items-center space-x-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                    onClick={() => {
+                      if (startingGame) return;
+                      setStartingGame(true);
+                      goToGamePlay();
+                      setTimeout(() => setStartingGame(false), 2000);
+                    }}
+                    disabled={startingGame}
+                    className="flex items-center space-x-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <span>Frage lösen</span>
-                    <ArrowRight className="w-4 h-4" />
+                    {startingGame ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        <span>Öffne...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Frage lösen</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
                   </button>
                 </div>
                 <div className="bg-white/10 rounded-lg p-4">
