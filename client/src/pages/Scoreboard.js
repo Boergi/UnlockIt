@@ -224,9 +224,9 @@ const Scoreboard = () => {
         </div>
 
         {/* Scoreboard */}
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {scoreboard.length === 0 ? (
-            <div className="text-center py-12">
+            <div className="col-span-full text-center py-12">
               <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
               <p className="text-xl text-gray-400">Noch keine Teams angemeldet</p>
             </div>
@@ -234,37 +234,48 @@ const Scoreboard = () => {
             scoreboard.map((team, index) => (
               <div
                 key={team.id}
-                className={`scoreboard-entry rounded-lg border p-4 ${getRankClass(index + 1)}`}
+                className={`scoreboard-entry rounded-xl border p-6 transition-all duration-300 hover:scale-105 hover:shadow-xl backdrop-blur-sm ${getRankClass(index + 1)}`}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-4">
-                    <div className="flex-shrink-0">
-                      {getRankIcon(index + 1)}
-                    </div>
-                    {/* Team Logo */}
-                    {team.logo_url && (
-                      <div className="flex-shrink-0">
-                        <img
-                          src={getImageUrl(team.logo_url)}
-                          alt={`${team.name} Logo`}
-                          className="w-12 h-12 rounded-full object-cover border-2 border-white/20"
-                        />
+                <div className="text-center">
+                  {/* Rank Icon */}
+                  <div className="flex justify-center mb-4">
+                    {getRankIcon(index + 1)}
+                  </div>
+                  
+                  {/* Team Logo */}
+                  <div className="flex justify-center mb-4">
+                    {team.logo_url ? (
+                      <img
+                        src={getImageUrl(team.logo_url)}
+                        alt={`${team.name} Logo`}
+                        className="w-20 h-20 rounded-full object-cover border-3 border-white/30 shadow-lg"
+                      />
+                    ) : (
+                      <div className="w-20 h-20 rounded-full bg-gradient-to-br from-gray-600 to-gray-800 border-3 border-white/30 shadow-lg flex items-center justify-center">
+                        <Users className="w-8 h-8 text-white/70" />
                       </div>
                     )}
-                    <div className="min-w-0 flex-1">
-                      <h3 className="text-lg font-semibold text-white truncate">
-                        {team.name}
-                      </h3>
-                      <p className="text-sm text-gray-400">
-                        {team.questions_solved || 0} Rätsel gelöst
-                      </p>
-                    </div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-2xl font-bold text-white">
+                  
+                  {/* Team Name */}
+                  <h3 className="text-xl font-bold text-white mb-2 truncate">
+                    {team.name}
+                  </h3>
+                  
+                  {/* Points */}
+                  <div className="mb-3">
+                    <div className="text-3xl font-bold text-white">
                       {team.total_points || 0}
                     </div>
-                    <div className="text-xs text-gray-400">Punkte</div>
+                    <div className="text-sm text-gray-400">Punkte</div>
+                  </div>
+                  
+                  {/* Questions Solved */}
+                  <div className="flex items-center justify-center space-x-2 text-gray-300">
+                    <Target className="w-4 h-4" />
+                    <span className="text-sm">
+                      {team.questions_solved || 0} Rätsel gelöst
+                    </span>
                   </div>
                 </div>
               </div>
