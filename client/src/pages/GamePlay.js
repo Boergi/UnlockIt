@@ -569,7 +569,7 @@ const GamePlay = () => {
   }
 
   return (
-    <div className="min-h-screen p-4">
+    <div className="min-h-screen p-2 sm:p-4 overflow-x-hidden">
       <div className="max-w-4xl mx-auto">
         {/* Back Button */}
         <div className="mb-4">
@@ -588,12 +588,12 @@ const GamePlay = () => {
 
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">
+          <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2 break-words">
             Team: {team?.name}
           </h1>
           
           {/* Position and Score */}
-          <div className="flex items-center justify-center space-x-6 mb-4">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6 mb-4">
             <div className="flex items-center">
               <Trophy className="w-5 h-5 text-yellow-400 mr-2" />
               <span className="text-white font-semibold">
@@ -608,7 +608,7 @@ const GamePlay = () => {
           </div>
 
           {/* Timer and Attempts */}
-          <div className="flex items-center justify-center space-x-6">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6">
             <div className="flex items-center">
               <Clock className="w-5 h-5 text-yellow-400 mr-2" />
               <span className={`text-lg font-mono ${timeLeft < 60 ? 'text-red-400' : 'text-white'}`}>
@@ -623,7 +623,7 @@ const GamePlay = () => {
         </div>
 
         {currentQuestion && (
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-8 mb-8 relative">
+          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 sm:p-8 mb-8 relative">
             {/* Points Info Button */}
             <button
               onClick={() => setShowPointsInfo(true)}
@@ -677,11 +677,11 @@ const GamePlay = () => {
                 
                 <div className="grid gap-3">
                   {availableTips.map((tipNum) => (
-                    <div key={tipNum} className="flex items-center space-x-3">
+                    <div key={tipNum} className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
                       <button
                         onClick={() => getTip(tipNum)}
                         disabled={usedTips >= tipNum || questionCompleted}
-                        className={`px-4 py-2 rounded-md font-medium transition-all duration-200 ${
+                        className={`px-4 py-2 rounded-md font-medium transition-all duration-200 shrink-0 ${
                           usedTips >= tipNum || questionCompleted
                             ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
                             : tipNum === 3
@@ -693,8 +693,8 @@ const GamePlay = () => {
                       </button>
                       
                       {tips[tipNum - 1] && (
-                        <div className="flex-1 p-3 bg-black/30 rounded-md">
-                          <p className="text-gray-300">{tips[tipNum - 1]}</p>
+                        <div className="flex-1 p-3 bg-black/30 rounded-md w-full">
+                          <p className="text-gray-300 break-words">{tips[tipNum - 1]}</p>
                         </div>
                       )}
                     </div>

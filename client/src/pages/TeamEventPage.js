@@ -441,10 +441,10 @@ const TeamEventPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 p-2 sm:p-4 overflow-x-hidden">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 mb-6 border border-gray-600">
+        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 sm:p-6 mb-6 border border-gray-600">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between">
             <div className="flex items-center space-x-4 mb-4 md:mb-0">
               {/* Event Logo */}
@@ -457,11 +457,11 @@ const TeamEventPage = () => {
                 />
               )}
               
-              <div>
-                <h1 className="text-2xl font-bold text-white">{event.name}</h1>
+              <div className="min-w-0 flex-1">
+                <h1 className="text-xl sm:text-2xl font-bold text-white break-words">{event.name}</h1>
                 <div className="flex items-center space-x-2 text-gray-300">
-                  <Users className="w-4 h-4" />
-                  <span>Team: {team.name}</span>
+                  <Users className="w-4 h-4 shrink-0" />
+                  <span className="break-words">Team: {team.name}</span>
                   {team.logo_url && (
                     <img
                       src={getImageUrl(team.logo_url)}
@@ -473,27 +473,27 @@ const TeamEventPage = () => {
               </div>
             </div>
 
-            <div className="flex space-x-2">
+            <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => setShowQrCode(true)}
-                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                className="flex items-center space-x-2 px-3 sm:px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm"
               >
                 <QrCode className="w-4 h-4" />
-                <span>QR-Code</span>
+                <span className="hidden sm:inline">QR-Code</span>
               </button>
               <button
                 onClick={copyTeamUrl}
-                className="flex items-center space-x-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                className="flex items-center space-x-2 px-3 sm:px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm"
               >
                 <Copy className="w-4 h-4" />
-                <span>Link</span>
+                <span className="hidden sm:inline">Link</span>
               </button>
               <button
                 onClick={leaveTeam}
-                className="flex items-center space-x-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+                className="flex items-center space-x-2 px-3 sm:px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors text-sm"
               >
                 <Home className="w-4 h-4" />
-                <span>Verlassen</span>
+                <span className="hidden sm:inline">Verlassen</span>
               </button>
             </div>
           </div>
@@ -502,7 +502,7 @@ const TeamEventPage = () => {
         {/* Event Status */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           {/* Countdown/Status */}
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-gray-600">
+          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 sm:p-6 border border-gray-600">
             <div className="flex items-center space-x-2 mb-4">
               <Clock className="w-5 h-5 text-blue-400" />
               <h2 className="text-lg font-semibold text-white">Event Status</h2>
@@ -525,21 +525,21 @@ const TeamEventPage = () => {
             ) : (
               <div className="text-center">
                 <div className="text-lg font-semibold text-yellow-400 mb-3">Startet in:</div>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <div className="bg-white/10 rounded-lg p-2 text-center">
-                    <div className="text-xl font-bold text-white">{timeLeft.days || 0}</div>
+                    <div className="text-lg sm:text-xl font-bold text-white">{timeLeft.days || 0}</div>
                     <div className="text-xs text-gray-300">Tage</div>
                   </div>
                   <div className="bg-white/10 rounded-lg p-2 text-center">
-                    <div className="text-xl font-bold text-white">{timeLeft.hours || 0}</div>
+                    <div className="text-lg sm:text-xl font-bold text-white">{timeLeft.hours || 0}</div>
                     <div className="text-xs text-gray-300">Std</div>
                   </div>
                   <div className="bg-white/10 rounded-lg p-2 text-center">
-                    <div className="text-xl font-bold text-white">{timeLeft.minutes || 0}</div>
+                    <div className="text-lg sm:text-xl font-bold text-white">{timeLeft.minutes || 0}</div>
                     <div className="text-xs text-gray-300">Min</div>
                   </div>
                   <div className="bg-white/10 rounded-lg p-2 text-center">
-                    <div className="text-xl font-bold text-white">{timeLeft.seconds || 0}</div>
+                    <div className="text-lg sm:text-xl font-bold text-white">{timeLeft.seconds || 0}</div>
                     <div className="text-xs text-gray-300">Sek</div>
                   </div>
                 </div>
@@ -548,7 +548,7 @@ const TeamEventPage = () => {
           </div>
 
           {/* Team Progress */}
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-gray-600">
+          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 sm:p-6 border border-gray-600">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center space-x-2">
                 <Trophy className="w-5 h-5 text-yellow-400" />
@@ -631,11 +631,11 @@ const TeamEventPage = () => {
 
             {/* Start Next Question Button - only show if no current question is active AND there are uncompleted questions */}
             {!currentQuestion && teamProgress.some(q => !q.completed) && (
-              <div className="bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-lg p-6 border border-blue-500/30">
-                <div className="flex items-center justify-between mb-4">
+              <div className="bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-lg p-4 sm:p-6 border border-blue-500/30">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
                   <div className="flex items-center space-x-2">
                     <Target className="w-6 h-6 text-blue-400" />
-                    <h2 className="text-xl font-bold text-white">Nächste Frage starten</h2>
+                    <h2 className="text-lg sm:text-xl font-bold text-white">Nächste Frage starten</h2>
                   </div>
                   <button
                     onClick={() => {
@@ -701,11 +701,11 @@ const TeamEventPage = () => {
 
             {/* Current Question */}
             {currentQuestion && (
-              <div className="bg-gradient-to-r from-green-500/20 to-blue-500/20 rounded-lg p-6 border border-green-500/30">
-                <div className="flex items-center justify-between mb-4">
+              <div className="bg-gradient-to-r from-green-500/20 to-blue-500/20 rounded-lg p-4 sm:p-6 border border-green-500/30">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
                   <div className="flex items-center space-x-2">
                     <Target className="w-6 h-6 text-green-400" />
-                    <h2 className="text-xl font-bold text-white">Aktuelle Frage</h2>
+                    <h2 className="text-lg sm:text-xl font-bold text-white">Aktuelle Frage</h2>
                     <span className="text-xs bg-green-600 text-white px-2 py-1 rounded-full">In Bearbeitung</span>
                   </div>
                   <button
@@ -743,7 +743,7 @@ const TeamEventPage = () => {
             )}
 
             {/* Questions Overview */}
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-gray-600">
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 sm:p-6 border border-gray-600">
               <h2 className="text-xl font-bold text-white mb-4">Bearbeitete Fragen</h2>
               
               {teamProgress.filter(progress => progress.completed || progress.attempt_1 !== null || progress.attempt_2 !== null || progress.attempt_3 !== null).length > 0 ? (
