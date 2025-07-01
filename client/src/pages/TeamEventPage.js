@@ -19,8 +19,10 @@ import {
   Home,
   QrCode,
   Share2,
-  Copy
+  Copy,
+  Info
 } from 'lucide-react';
+import PointsInfoModal from '../components/PointsInfoModal';
 
 const TeamEventPage = () => {
   const { teamId, eventId } = useParams();
@@ -38,6 +40,7 @@ const TeamEventPage = () => {
   const [qrCodeUrl, setQrCodeUrl] = useState('');
   const [showQrCode, setShowQrCode] = useState(false);
   const [startingGame, setStartingGame] = useState(false);
+  const [showPointsInfo, setShowPointsInfo] = useState(false);
 
   useEffect(() => {
     const initializePage = async () => {
@@ -546,9 +549,18 @@ const TeamEventPage = () => {
 
           {/* Team Progress */}
           <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-gray-600">
-            <div className="flex items-center space-x-2 mb-4">
-              <Trophy className="w-5 h-5 text-yellow-400" />
-              <h2 className="text-lg font-semibold text-white">Team Fortschritt</h2>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-2">
+                <Trophy className="w-5 h-5 text-yellow-400" />
+                <h2 className="text-lg font-semibold text-white">Team Fortschritt</h2>
+              </div>
+              <button
+                onClick={() => setShowPointsInfo(true)}
+                className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-blue-400 hover:text-blue-300 transition-all duration-200"
+                title="Punkteberechnung anzeigen"
+              >
+                <Info className="w-4 h-4" />
+              </button>
             </div>
 
             {teamProgress.length > 0 ? (
@@ -878,6 +890,12 @@ const TeamEventPage = () => {
              </div>
            </div>
          )}
+
+         {/* Points Info Modal */}
+         <PointsInfoModal 
+           isOpen={showPointsInfo} 
+           onClose={() => setShowPointsInfo(false)} 
+         />
        </div>
      </div>
    );

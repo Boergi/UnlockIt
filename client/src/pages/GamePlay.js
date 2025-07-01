@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useSocket } from '../contexts/SocketContext';
 import axios from 'axios';
 import toast from 'react-hot-toast';
-import { Lock, Clock, Lightbulb, Send, CheckCircle, XCircle, Trophy, ArrowLeft } from 'lucide-react';
+import { Lock, Clock, Lightbulb, Send, CheckCircle, XCircle, Trophy, ArrowLeft, Info } from 'lucide-react';
+import PointsInfoModal from '../components/PointsInfoModal';
 
 // Global tracker to prevent duplicate question starts
 const startedQuestions = new Set();
@@ -102,6 +103,7 @@ const GamePlay = () => {
   const [completingQuestion, setCompletingQuestion] = useState(false);
   const [loadingGame, setLoadingGame] = useState(false);
   const [startingQuestion, setStartingQuestion] = useState(false);
+  const [showPointsInfo, setShowPointsInfo] = useState(false);
   const hasInitialized = useRef(false);
 
   // Store the original teamId to prevent re-runs on parameter changes
@@ -621,7 +623,16 @@ const GamePlay = () => {
         </div>
 
         {currentQuestion && (
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-8 mb-8">
+          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-8 mb-8 relative">
+            {/* Points Info Button */}
+            <button
+              onClick={() => setShowPointsInfo(true)}
+              className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-blue-400 hover:text-blue-300 transition-all duration-200"
+              title="Punkteberechnung anzeigen"
+            >
+              <Info className="w-5 h-5" />
+            </button>
+
             {/* Lock Visual */}
             <div className="text-center mb-8">
               <Lock className="w-24 h-24 text-yellow-400 mx-auto mb-4" />
@@ -766,6 +777,12 @@ const GamePlay = () => {
             )}
           </div>
         )}
+
+        {/* Points Info Modal */}
+        <PointsInfoModal 
+          isOpen={showPointsInfo} 
+          onClose={() => setShowPointsInfo(false)} 
+        />
       </div>
     </div>
   );
