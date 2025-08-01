@@ -325,7 +325,7 @@ Contributions sind willkommen! Bitte:
 
 ## 📄 Lizenz
 
-MIT License - Siehe LICENSE Datei für Details.
+Dieses Projekt ist nur für die private Nutzung lizenziert. Eine kommerzielle Nutzung ist nicht gestattet. Alle Rechte vorbehalten.
 
 ---
 
